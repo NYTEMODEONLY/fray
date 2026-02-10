@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useMediaPreview } from "../hooks/useMediaPreview";
 
-export const CallDock = () => {
+interface CallDockProps {
+  mode: "voice" | "video" | null;
+}
+
+export const CallDock = ({ mode }: CallDockProps) => {
   const [inCall, setInCall] = useState(false);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
@@ -22,12 +26,24 @@ export const CallDock = () => {
     }
   }, [screenStream]);
 
+  if (!mode) {
+    return (
+      <section className="call-placeholder">
+        <p className="eyebrow">Voice & Video</p>
+        <h3>Off by default</h3>
+        <p>Join a voice or video channel to start a call.</p>
+      </section>
+    );
+  }
+
   return (
     <section className="call-dock">
       <div className="call-header">
         <div>
           <p className="eyebrow">MatrixRTC</p>
-          <h3>{inCall ? "Live in War Room" : "Voice ready"}</h3>
+          <h3>
+            {inCall ? (mode === "video" ? "Live video room" : "Live voice room") : "Ready to join"}
+          </h3>
         </div>
         <button className="pill" onClick={() => setInCall((state) => !state)}>
           {inCall ? "Leave" : "Join"}
@@ -58,16 +74,18 @@ export const CallDock = () => {
 
       {error && <p className="call-error">{error}</p>}
 
-      <div className="call-previews">
-        <div className="preview">
-          <p>Camera</p>
-          <video ref={cameraRef} autoPlay muted playsInline />
+      {(cameraStream || screenStream) && (
+        <div className="call-previews">
+          <div className="preview">
+            <p>Camera</p>
+            <video ref={cameraRef} autoPlay muted playsInline />
+          </div>
+          <div className="preview">
+            <p>Screen</p>
+            <video ref={screenRef} autoPlay muted playsInline />
+          </div>
         </div>
-        <div className="preview">
-          <p>Screen</p>
-          <video ref={screenRef} autoPlay muted playsInline />
-        </div>
-      </div>
+      )}
     </section>
   );
 };

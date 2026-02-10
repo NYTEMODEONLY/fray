@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { messages as seedMessages, me, rooms as seedRooms, spaces, users } from "../data/mock";
-import { Attachment, Message, NotificationItem, Room } from "../types";
+import { Attachment, Message, NotificationItem, Room, RoomType } from "../types";
 
 const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -32,6 +32,7 @@ interface AppState {
   setOnline: (value: boolean) => void;
   dismissNotification: (id: string) => void;
   sendMessage: (payload: { body: string; attachments?: Attachment[]; threadRootId?: string }) => void;
+  createRoom: (payload: { name: string; type: RoomType; category?: string }) => void;
   toggleReaction: (messageId: string, emoji: string) => void;
   togglePin: (messageId: string) => void;
   startReply: (messageId: string) => void;
@@ -118,6 +119,30 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       notifications: state.notifications.filter((notification) => notification.id !== id)
     })),
+  createRoom: ({ name, type, category }) =>
+    set((state) => {
+      const room: Room = {
+        id: uid("r"),
+        spaceId: state.currentSpaceId,
+        name,
+        type,
+        category: category?.trim() || "channels",
+        topic:
+          type === "voice"
+            ? "Drop in voice channel"
+            : type === "video"
+              ? "Video + screen share"
+              : "New text channel",
+        unreadCount: 0
+      };
+      return {
+        rooms: [...state.rooms, room],
+        currentRoomId: room.id,
+        replyToId: null,
+        threadRootId: null,
+        showThread: false
+      };
+    }),
   sendMessage: ({ body, attachments = [], threadRootId }) =>
     set((state) => {
       const replyToId = state.replyToId ?? undefined;

@@ -6,15 +6,21 @@ interface ChannelListProps {
   currentRoomId: string;
   onSelect: (roomId: string) => void;
   spaceName: string;
+  onCreateRoom: (payload: { name: string; type: Room["type"]; category?: string }) => void;
 }
 
 export const ChannelList = ({
   rooms,
   currentRoomId,
   onSelect,
-  spaceName
+  spaceName,
+  onCreateRoom
 }: ChannelListProps) => {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<Room["type"]>("text");
+  const [newCategory, setNewCategory] = useState("community");
 
   const grouped = useMemo(() => {
     const categories = new Map<string, Room[]>();
@@ -30,6 +36,15 @@ export const ChannelList = ({
   }, [rooms]);
 
   const dms = rooms.filter((room) => room.type === "dm");
+  const categories = grouped.map(([category]) => category);
+
+  const handleCreate = () => {
+    const name = newName.trim();
+    if (!name) return;
+    onCreateRoom({ name, type: newType, category: newCategory });
+    setNewName("");
+    setShowCreate(false);
+  };
 
   return (
     <aside className="channel-panel">
@@ -110,9 +125,49 @@ export const ChannelList = ({
       </div>
 
       <div className="channel-panel-footer">
-        <button className="ghost">New Channel</button>
+        <button className="ghost" onClick={() => setShowCreate((state) => !state)}>
+          {showCreate ? "Close" : "New Channel"}
+        </button>
         <button className="primary">Invite</button>
       </div>
+
+      {showCreate && (
+        <div className="channel-create">
+          <p className="eyebrow">Create Channel</p>
+          <input
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            placeholder="channel-name"
+          />
+          <div className="create-row">
+            <label>
+              Type
+              <select value={newType} onChange={(event) => setNewType(event.target.value as Room["type"])}>
+                <option value="text">Text</option>
+                <option value="voice">Voice</option>
+                <option value="video">Video</option>
+              </select>
+            </label>
+            <label>
+              Category
+              <input
+                list="category-list"
+                value={newCategory}
+                onChange={(event) => setNewCategory(event.target.value)}
+                placeholder="category"
+              />
+            </label>
+            <datalist id="category-list">
+              {categories.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          </div>
+          <button className="primary" onClick={handleCreate}>
+            Create
+          </button>
+        </div>
+      )}
     </aside>
   );
 };

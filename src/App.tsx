@@ -35,6 +35,7 @@ const App = () => {
     notifications,
     selectSpace,
     selectRoom,
+    createRoom,
     toggleMembers,
     toggleThread,
     togglePins,
@@ -101,6 +102,7 @@ const App = () => {
         currentRoomId={currentRoomId}
         onSelect={selectRoom}
         spaceName={currentSpace?.name ?? "Fray"}
+        onCreateRoom={createRoom}
       />
 
       <main className="chat-panel">
@@ -156,7 +158,15 @@ const App = () => {
           </div>
         </div>
 
-        <CallDock />
+        <CallDock
+          mode={
+            currentRoom?.type === "voice"
+              ? "voice"
+              : currentRoom?.type === "video"
+                ? "video"
+                : null
+          }
+        />
       </main>
 
       {showMembers && <MemberList users={users} />}
