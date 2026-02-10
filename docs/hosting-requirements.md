@@ -100,6 +100,39 @@ If your server is **private only**, you can disable federation and only expose w
 
 ---
 
+## Backend & Storage Model (What You Host)
+
+Fray is only the client UI. Your Matrix homeserver is the backend and system of record.
+
+In practice, self-hosting means you own three persistent data layers:
+
+1. **Database (required)**  
+   Stores users, room state, timeline metadata, memberships, auth/session records, and server config state.
+2. **Media storage (required)**  
+   Stores uploaded files/images and cached remote media.
+3. **Server keys/secrets (required)**  
+   Stores signing keys and sensitive config needed to preserve server identity and trust.
+
+If you are using containers, mount persistent volumes for all three.  
+If any one of these is lost, you will have partial or full data/identity loss.
+
+### Operational Recommendation
+
+- **Small testing setup**: single host with persistent disk is fine.
+- **Production setup**: durable database (commonly PostgreSQL), persistent media volume/object storage strategy, and encrypted key backups.
+
+### Backup Minimum
+
+At minimum, back up:
+
+- database dumps/snapshots
+- media directory or object bucket
+- homeserver keys and secret config
+
+Run backups on a schedule and test restore at least once before inviting a large community.
+
+---
+
 ## Fray Client Configuration
 
 When Fray asks for a homeserver, use your base URL:

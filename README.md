@@ -100,6 +100,27 @@ See: [docs/hosting-requirements.md](docs/hosting-requirements.md)
 
 ---
 
+## Backend & Storage (Self-Hosted)
+
+Fray does not ship a central backend. The backend for your community is your Matrix homeserver.
+
+- **Authoritative data lives on the homeserver**: users, rooms, messages, membership, power levels, and media metadata.
+- **Fray stores local client state only**: login session and local sync/cache on each device.
+- **You choose where server data lives**: local disk, attached volume, or managed infrastructure in your VPS/cloud setup.
+
+For a typical self-hosted Matrix stack (for example Synapse), plan persistence for:
+
+1. **Database**: room state, timeline metadata, accounts, tokens, etc.  
+   Production setups commonly use PostgreSQL.
+2. **Media store**: uploaded files/images and remote media cache.
+3. **Server secrets/keys**: signing keys and config secrets required to keep identity stable.
+
+If you rebuild or migrate your server, you must restore all three (database, media, keys) to preserve continuity.
+
+See detailed setup guidance: [docs/hosting-requirements.md](docs/hosting-requirements.md)
+
+---
+
 ## MatrixRTC (Voice / Video)
 
 Voice and video are powered by MatrixRTC group calls:
