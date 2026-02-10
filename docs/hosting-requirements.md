@@ -119,7 +119,26 @@ If any one of these is lost, you will have partial or full data/identity loss.
 ### Operational Recommendation
 
 - **Small testing setup**: single host with persistent disk is fine.
-- **Production setup**: durable database (commonly PostgreSQL), persistent media volume/object storage strategy, and encrypted key backups.
+- **Production setup**: PostgreSQL database, persistent media volume/object storage strategy, and encrypted key backups.
+
+### Database Recommendation (Matrix + Fray)
+
+If you are running Synapse, the practical recommendation is:
+
+1. **Use PostgreSQL for production** (recommended default for real communities).
+2. **Use SQLite only for local testing or tiny short-lived setups**.
+
+Why:
+
+- Synapse uses SQLite as the default if no database is configured.
+- Synapse worker mode requires PostgreSQL (SQLite is a single-process option).
+- Advanced options such as database sharding are PostgreSQL-only.
+
+Fray itself is database-agnostic here. It talks Matrix to your homeserver, so the DB decision is entirely a server-operator choice.
+
+Reference (Synapse docs):
+- Database configuration defaults (SQLite if unspecified): https://element-hq.github.io/synapse/develop/usage/configuration/config_documentation.html#database
+- Worker mode and scaling requirements (PostgreSQL required for workers): https://element-hq.github.io/synapse/develop/workers.html
 
 ### Backup Minimum
 

@@ -110,12 +110,14 @@ Fray does not ship a central backend. The backend for your community is your Mat
 
 For a typical self-hosted Matrix stack (for example Synapse), plan persistence for:
 
-1. **Database**: room state, timeline metadata, accounts, tokens, etc.  
-   Production setups commonly use PostgreSQL.
+1. **Database (recommended: PostgreSQL for production)**: room state, timeline metadata, accounts, tokens, etc.  
+   SQLite is fine for local testing/small demos, but PostgreSQL is the better default for real communities.
 2. **Media store**: uploaded files/images and remote media cache.
 3. **Server secrets/keys**: signing keys and config secrets required to keep identity stable.
 
 If you rebuild or migrate your server, you must restore all three (database, media, keys) to preserve continuity.
+
+Fray works with either backend because this choice is homeserver-side, not client-side.
 
 See detailed setup guidance: [docs/hosting-requirements.md](docs/hosting-requirements.md)
 
