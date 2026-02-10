@@ -96,8 +96,7 @@ To host your own Fray “server” like a game server:
 - You give your community the homeserver URL
 - They connect in Fray
 
-See:
-`/Users/lobo/Desktop/Progress/Built in 2025/fray/docs/hosting-requirements.md`
+See: [docs/hosting-requirements.md](docs/hosting-requirements.md)
 
 ---
 
