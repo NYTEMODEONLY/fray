@@ -1,0 +1,10 @@
+node_modules
+.DS_Store
+dist
+.env
+.env.local
+src-tauri/target
+src-tauri/gen
+.devserver.log
+fray-mvp.png
+tsconfig.tsbuildinfo
