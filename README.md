@@ -175,3 +175,5 @@ AGPL‑3.0‑or‑later
 Fray is built on the Matrix ecosystem and the matrix‑js‑sdk.
 
 ---
+
+a [nytemode](https://nytemode.com) project
