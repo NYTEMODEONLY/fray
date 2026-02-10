@@ -27,7 +27,8 @@ export const MessageComposer = ({
       name: file.name,
       type: file.type.startsWith("image/") ? "image" : "file",
       size: file.size,
-      url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined
+      url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+      file
     }));
     setAttachments((state) => [...state, ...next]);
   };

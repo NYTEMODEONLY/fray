@@ -21,6 +21,7 @@ export interface Attachment {
   type: "image" | "file";
   size: number;
   url?: string;
+  file?: File;
 }
 
 export interface Message {

@@ -1,30 +1,44 @@
-import { useEffect, useRef, useState } from "react";
-import { useMediaPreview } from "../hooks/useMediaPreview";
+import { useEffect, useRef } from "react";
+import { CallFeed } from "matrix-js-sdk/lib/webrtc/callFeed";
 
 interface CallDockProps {
   mode: "voice" | "video" | null;
+  joined: boolean;
+  micMuted: boolean;
+  videoMuted: boolean;
+  screenSharing: boolean;
+  localStream: MediaStream | null;
+  remoteStreams: CallFeed[];
+  screenStreams: CallFeed[];
+  onJoin: () => void;
+  onLeave: () => void;
+  onToggleMic: () => void;
+  onToggleVideo: () => void;
+  onToggleScreen: () => void;
 }
 
-export const CallDock = ({ mode }: CallDockProps) => {
-  const [inCall, setInCall] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [deafened, setDeafened] = useState(false);
-  const cameraRef = useRef<HTMLVideoElement | null>(null);
-  const screenRef = useRef<HTMLVideoElement | null>(null);
-  const { cameraStream, screenStream, error, startCamera, stopCamera, startScreen, stopScreen } =
-    useMediaPreview();
+export const CallDock = ({
+  mode,
+  joined,
+  micMuted,
+  videoMuted,
+  screenSharing,
+  localStream,
+  remoteStreams,
+  screenStreams,
+  onJoin,
+  onLeave,
+  onToggleMic,
+  onToggleVideo,
+  onToggleScreen
+}: CallDockProps) => {
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (cameraRef.current) {
-      cameraRef.current.srcObject = cameraStream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
     }
-  }, [cameraStream]);
-
-  useEffect(() => {
-    if (screenRef.current) {
-      screenRef.current.srcObject = screenStream;
-    }
-  }, [screenStream]);
+  }, [localStream]);
 
   if (!mode) {
     return (
@@ -42,48 +56,52 @@ export const CallDock = ({ mode }: CallDockProps) => {
         <div>
           <p className="eyebrow">MatrixRTC</p>
           <h3>
-            {inCall ? (mode === "video" ? "Live video room" : "Live voice room") : "Ready to join"}
+            {joined ? (mode === "video" ? "Live video room" : "Live voice room") : "Ready to join"}
           </h3>
         </div>
-        <button className="pill" onClick={() => setInCall((state) => !state)}>
-          {inCall ? "Leave" : "Join"}
+        <button className="pill" onClick={joined ? onLeave : onJoin}>
+          {joined ? "Leave" : "Join"}
         </button>
       </div>
 
       <div className="call-controls">
-        <button className={muted ? "pill warn" : "pill"} onClick={() => setMuted((s) => !s)}>
-          {muted ? "Muted" : "Mic on"}
+        <button className={micMuted ? "pill warn" : "pill"} onClick={onToggleMic}>
+          {micMuted ? "Muted" : "Mic on"}
         </button>
-        <button className={deafened ? "pill warn" : "pill"} onClick={() => setDeafened((s) => !s)}>
-          {deafened ? "Deafened" : "Audio on"}
+        <button className={videoMuted ? "pill warn" : "pill"} onClick={onToggleVideo}>
+          {videoMuted ? "Cam off" : "Cam on"}
         </button>
-        <button className="pill" onClick={() => (cameraStream ? stopCamera() : startCamera())}>
-          {cameraStream ? "Stop Cam" : "Start Cam"}
-        </button>
-        <button className="pill" onClick={() => (screenStream ? stopScreen() : startScreen())}>
-          {screenStream ? "Stop Share" : "Share Screen"}
+        <button className={screenSharing ? "pill warn" : "pill"} onClick={onToggleScreen}>
+          {screenSharing ? "Stop Share" : "Share Screen"}
         </button>
       </div>
 
-      <div className={muted || !inCall ? "voice-meter muted" : "voice-meter"}>
+      <div className={micMuted || !joined ? "voice-meter muted" : "voice-meter"}>
         <span />
         <span />
         <span />
         <span />
       </div>
 
-      {error && <p className="call-error">{error}</p>}
-
-      {(cameraStream || screenStream) && (
+      {(localStream || remoteStreams.length > 0 || screenStreams.length > 0) && (
         <div className="call-previews">
           <div className="preview">
-            <p>Camera</p>
-            <video ref={cameraRef} autoPlay muted playsInline />
+            <p>Local</p>
+            <video ref={localVideoRef} autoPlay muted playsInline />
           </div>
-          <div className="preview">
-            <p>Screen</p>
-            <video ref={screenRef} autoPlay muted playsInline />
-          </div>
+          {screenStreams.slice(0, 1).map((feed) => (
+            <div key={feed.stream.id} className="preview">
+              <p>Screen</p>
+              <video
+                ref={(node) => {
+                  if (node) node.srcObject = feed.stream;
+                }}
+                autoPlay
+                muted
+                playsInline
+              />
+            </div>
+          ))}
         </div>
       )}
     </section>

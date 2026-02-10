@@ -11,6 +11,7 @@ interface RoomHeaderProps {
   onToggleOnline: () => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  onLogout?: () => void;
 }
 
 export const RoomHeader = ({
@@ -23,7 +24,8 @@ export const RoomHeader = ({
   isOnline,
   onToggleOnline,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  onLogout
 }: RoomHeaderProps) => (
   <header className="room-header">
     <div className="room-title">
@@ -58,6 +60,11 @@ export const RoomHeader = ({
       <button className="pill ghost" onClick={onSimulate}>
         Simulate Ping
       </button>
+      {onLogout && (
+        <button className="pill ghost" onClick={onLogout}>
+          Logout
+        </button>
+      )}
     </div>
   </header>
 );
