@@ -98,6 +98,9 @@ To host your own Fray “server” like a game server:
 
 See: [docs/hosting-requirements.md](docs/hosting-requirements.md)
 
+For a step-by-step Docker deployment + diagnostics workflow, see:
+[docs/vps-matrix-runbook.md](docs/vps-matrix-runbook.md)
+
 ---
 
 ## Backend & Storage (Self-Hosted)

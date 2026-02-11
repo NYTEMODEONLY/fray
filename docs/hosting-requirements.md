@@ -100,6 +100,25 @@ If your server is **private only**, you can disable federation and only expose w
 
 ---
 
+## Docker Deployment Pattern (Recommended)
+
+For compartmentalized hosting, run Matrix in Docker with separate services:
+
+- `postgres` (database)
+- `synapse` (homeserver)
+- `nginx` (reverse proxy / ingress)
+
+Persist these paths as volumes:
+
+- PostgreSQL data directory
+- Synapse `/data` (keys, config, media)
+- TLS/certbot data (if HTTPS enabled)
+
+Reference deployment runbook:
+- [docs/vps-matrix-runbook.md](vps-matrix-runbook.md)
+
+---
+
 ## Backend & Storage Model (What You Host)
 
 Fray is only the client UI. Your Matrix homeserver is the backend and system of record.
@@ -152,6 +171,39 @@ Run backups on a schedule and test restore at least once before inviting a large
 
 ---
 
+## Observability & Error Logging (Docker)
+
+You should have two layers of logging:
+
+1. **Container runtime logs** (stdout/stderr from `synapse`, `postgres`, `nginx`).
+2. **Application health checks** (Matrix API + service readiness).
+
+Recommended compose logging policy (prevents unbounded log growth):
+
+```yaml
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+```
+
+Fast triage commands:
+
+```bash
+docker compose ps
+docker compose logs --tail=200 synapse
+docker compose logs --tail=120 postgres
+docker compose logs --tail=120 nginx
+curl -s --compressed http://YOUR_HOST/_matrix/client/versions
+```
+
+Optional but strongly recommended:
+
+- Keep a one-command diagnostics script on-host (for example `fray-matrix-diagnose.sh`) that runs service status, health checks, and recent logs together.
+
+---
+
 ## Fray Client Configuration
 
 When Fray asks for a homeserver, use your base URL:
@@ -159,6 +211,8 @@ When Fray asks for a homeserver, use your base URL:
 - Example: `https://matrix.yourdomain.com`
 
 You can share this with your community as the “server address.”
+
+If you are in temporary HTTP test mode, use `http://...` explicitly.
 
 ---
 

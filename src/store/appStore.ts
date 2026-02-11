@@ -316,8 +316,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     try {
       const store = new IndexedDBStore({ indexedDB: window.indexedDB, dbName: "fray-matrix" });
-      await store.startup();
-      const client = createClient({
+      let client = createClient({
         baseUrl: session.baseUrl,
         accessToken: session.accessToken,
         userId: session.userId,
@@ -325,6 +324,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         store,
         timelineSupport: true
       });
+      try {
+        // matrix-js-sdk requires startup after the store is attached to a client instance.
+        await store.startup();
+      } catch (error) {
+        console.warn("IndexedDB store startup failed, retrying without persistent store", error);
+        client = createClient({
+          baseUrl: session.baseUrl,
+          accessToken: session.accessToken,
+          userId: session.userId,
+          deviceId: session.deviceId,
+          timelineSupport: true
+        });
+      }
 
       try {
         await client.initRustCrypto();
