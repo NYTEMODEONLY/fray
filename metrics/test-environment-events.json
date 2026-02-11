@@ -1,0 +1,30 @@
+[
+  { "id": "w1-m1", "type": "message_send_success", "timestamp": "2026-01-12T10:00:00.000Z" },
+  { "id": "w1-m2", "type": "message_send_success", "timestamp": "2026-01-13T11:00:00.000Z" },
+  { "id": "w1-d1", "type": "dead_click", "timestamp": "2026-01-13T12:00:00.000Z" },
+  { "id": "w1-d2", "type": "dead_click", "timestamp": "2026-01-14T09:00:00.000Z" },
+  { "id": "w1-s1", "type": "settings_completion", "timestamp": "2026-01-15T08:30:00.000Z" },
+
+  { "id": "w2-m1", "type": "message_send_success", "timestamp": "2026-01-19T10:00:00.000Z" },
+  { "id": "w2-m2", "type": "message_send_success", "timestamp": "2026-01-20T11:00:00.000Z" },
+  { "id": "w2-m3", "type": "message_send_success", "timestamp": "2026-01-21T12:00:00.000Z" },
+  { "id": "w2-d1", "type": "dead_click", "timestamp": "2026-01-21T14:00:00.000Z" },
+  { "id": "w2-s1", "type": "settings_completion", "timestamp": "2026-01-23T10:00:00.000Z" },
+  { "id": "w2-mod1", "type": "moderation_action_success", "timestamp": "2026-01-24T10:00:00.000Z" },
+
+  { "id": "w3-m1", "type": "message_send_success", "timestamp": "2026-01-26T10:00:00.000Z" },
+  { "id": "w3-m2", "type": "message_send_success", "timestamp": "2026-01-27T11:00:00.000Z" },
+  { "id": "w3-m3", "type": "message_send_success", "timestamp": "2026-01-28T12:00:00.000Z" },
+  { "id": "w3-m4", "type": "message_send_success", "timestamp": "2026-01-29T13:00:00.000Z" },
+  { "id": "w3-d1", "type": "dead_click", "timestamp": "2026-01-29T13:30:00.000Z" },
+  { "id": "w3-s1", "type": "settings_completion", "timestamp": "2026-01-30T08:00:00.000Z" },
+  { "id": "w3-mod1", "type": "moderation_action_success", "timestamp": "2026-02-01T11:00:00.000Z" },
+
+  { "id": "w4-m1", "type": "message_send_success", "timestamp": "2026-02-02T10:00:00.000Z" },
+  { "id": "w4-m2", "type": "message_send_success", "timestamp": "2026-02-03T11:00:00.000Z" },
+  { "id": "w4-m3", "type": "message_send_success", "timestamp": "2026-02-04T12:00:00.000Z" },
+  { "id": "w4-m4", "type": "message_send_success", "timestamp": "2026-02-05T13:00:00.000Z" },
+  { "id": "w4-m5", "type": "message_send_success", "timestamp": "2026-02-06T14:00:00.000Z" },
+  { "id": "w4-s1", "type": "settings_completion", "timestamp": "2026-02-06T15:00:00.000Z" },
+  { "id": "w4-mod1", "type": "moderation_action_success", "timestamp": "2026-02-07T10:00:00.000Z" }
+]

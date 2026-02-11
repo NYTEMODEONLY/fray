@@ -5,9 +5,16 @@ interface AuthScreenProps {
   error: string | null;
   onLogin: (baseUrl: string, username: string, password: string) => void;
   onRegister: (baseUrl: string, username: string, password: string) => void;
+  onUseOfflineDemo?: () => void;
 }
 
-export const AuthScreen = ({ status, error, onLogin, onRegister }: AuthScreenProps) => {
+export const AuthScreen = ({
+  status,
+  error,
+  onLogin,
+  onRegister,
+  onUseOfflineDemo
+}: AuthScreenProps) => {
   const [baseUrl, setBaseUrl] = useState("https://matrix.org");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +61,11 @@ export const AuthScreen = ({ status, error, onLogin, onRegister }: AuthScreenPro
           <button className="ghost" onClick={handleRegister} disabled={status === "connecting"}>
             Register
           </button>
+          {onUseOfflineDemo && (
+            <button className="pill" onClick={onUseOfflineDemo}>
+              Use Offline Demo
+            </button>
+          )}
         </div>
         <p className="auth-note">
           Registration uses Matrix dummy auth and may be disabled on some servers.

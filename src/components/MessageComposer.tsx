@@ -1,11 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Attachment } from "../types";
+import { AtSign, Bold, EyeOff, Paperclip, SendHorizontal } from "lucide-react";
 
 interface MessageComposerProps {
   replyToId: string | null;
   onClearReply: () => void;
   onSend: (payload: { body: string; attachments?: Attachment[] }) => void;
   placeholder?: string;
+  enterToSend?: boolean;
+  focusSignal?: number;
+  spellCheckEnabled?: boolean;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -14,11 +18,33 @@ export const MessageComposer = ({
   replyToId,
   onClearReply,
   onSend,
-  placeholder
+  placeholder,
+  enterToSend = true,
+  focusSignal,
+  spellCheckEnabled = true
 }: MessageComposerProps) => {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const resizeTextarea = (node: HTMLTextAreaElement | null) => {
+    if (!node) return;
+    node.style.height = "0px";
+    const nextHeight = Math.min(Math.max(node.scrollHeight, 22), 180);
+    node.style.height = `${nextHeight}px`;
+  };
+
+  useEffect(() => {
+    if (typeof focusSignal !== "number") return;
+    textareaRef.current?.focus();
+    resizeTextarea(textareaRef.current);
+  }, [focusSignal]);
+
+  useEffect(() => {
+    resizeTextarea(textareaRef.current);
+  }, [value]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return;
@@ -38,6 +64,24 @@ export const MessageComposer = ({
     onSend({ body: value.trim() || "(attachment)", attachments });
     setValue("");
     setAttachments([]);
+    resizeTextarea(textareaRef.current);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter") return;
+    if (event.nativeEvent.isComposing || isComposing) return;
+
+    if (enterToSend) {
+      if (event.shiftKey) return;
+      event.preventDefault();
+      handleSend();
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      handleSend();
+    }
   };
 
   return (
@@ -50,21 +94,58 @@ export const MessageComposer = ({
       )}
 
       <div className="composer-input">
-        <textarea
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder={placeholder ?? "Message"}
-          rows={3}
-        />
-        <div className="composer-actions">
-          <button onClick={() => fileInputRef.current?.click()}>Attach</button>
-          <button onClick={() => setValue((state) => `${state}**bold**`)}>Bold</button>
-          <button onClick={() => setValue((state) => `${state}||spoiler||`)}>Spoiler</button>
-          <button onClick={() => setValue((state) => `${state}@nyte `)}>@mention</button>
-          <button className="primary" onClick={handleSend}>
-            Send
+        <div className="composer-shell">
+          <button
+            className="composer-icon composer-icon-attach"
+            aria-label="Attach"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip size={14} strokeWidth={1.9} aria-hidden="true" />
           </button>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+              resizeTextarea(event.currentTarget);
+            }}
+            onKeyDown={handleKeyDown}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
+            placeholder={placeholder ?? "Message"}
+            rows={1}
+            spellCheck={spellCheckEnabled}
+          />
+          <div className="composer-actions">
+            <button
+              className="composer-icon composer-icon-glyph"
+              aria-label="Bold"
+              onClick={() => setValue((state) => `${state}**bold**`)}
+            >
+              <Bold size={15} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+            <button
+              className="composer-icon composer-icon-glyph"
+              aria-label="Spoiler"
+              onClick={() => setValue((state) => `${state}||spoiler||`)}
+            >
+              <EyeOff size={15} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+            <button
+              className="composer-icon composer-icon-glyph"
+              aria-label="@mention"
+              onClick={() => setValue((state) => `${state}@nyte `)}
+            >
+              <AtSign size={15} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+            <button className="composer-icon composer-icon-send" aria-label="Send" onClick={handleSend}>
+              <SendHorizontal size={14} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+          </div>
         </div>
+        <p className="composer-hint">
+          {enterToSend ? "Enter to send, Shift+Enter for newline" : "Ctrl/Cmd+Enter to send"}
+        </p>
       </div>
 
       {attachments.length > 0 && (

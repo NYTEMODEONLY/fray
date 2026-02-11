@@ -13,7 +13,9 @@ export const MemberList = ({ users }: MemberListProps) => (
     <div className="member-scroll">
       {users.map((user) => (
         <div key={user.id} className="member">
-          <div className={`avatar ${user.status}`}>{user.avatar}</div>
+          <div className={`avatar ${user.status}`}>
+            {user.avatarUrl ? <img src={user.avatarUrl} alt={`${user.name} avatar`} /> : user.avatar}
+          </div>
           <div className="member-meta">
             <p>{user.name}</p>
             <div className="roles">

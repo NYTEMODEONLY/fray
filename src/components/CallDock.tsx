@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CallFeed } from "matrix-js-sdk/lib/webrtc/callFeed";
+import { Mic, MicOff, PhoneCall, PhoneOff, ScreenShare, ScreenShareOff, Video, VideoOff } from "lucide-react";
 
 interface CallDockProps {
   mode: "voice" | "video" | null;
@@ -41,38 +42,34 @@ export const CallDock = ({
   }, [localStream]);
 
   if (!mode) {
-    return (
-      <section className="call-placeholder">
-        <p className="eyebrow">Voice & Video</p>
-        <h3>Off by default</h3>
-        <p>Join a voice or video channel to start a call.</p>
-      </section>
-    );
+    return null;
   }
 
   return (
-    <section className="call-dock">
+    <aside className="call-dock">
       <div className="call-header">
         <div>
-          <p className="eyebrow">MatrixRTC</p>
-          <h3>
-            {joined ? (mode === "video" ? "Live video room" : "Live voice room") : "Ready to join"}
-          </h3>
+          <p className="eyebrow">Voice & Video</p>
+          <h3>{joined ? (mode === "video" ? "Live video room" : "Live voice room") : "Ready to join"}</h3>
         </div>
         <button className="pill" onClick={joined ? onLeave : onJoin}>
-          {joined ? "Leave" : "Join"}
+          {joined ? <PhoneOff size={14} aria-hidden="true" /> : <PhoneCall size={14} aria-hidden="true" />}
+          <span>{joined ? "Leave" : "Join"}</span>
         </button>
       </div>
 
       <div className="call-controls">
         <button className={micMuted ? "pill warn" : "pill"} onClick={onToggleMic}>
-          {micMuted ? "Muted" : "Mic on"}
+          {micMuted ? <MicOff size={14} aria-hidden="true" /> : <Mic size={14} aria-hidden="true" />}
+          <span>{micMuted ? "Muted" : "Mic on"}</span>
         </button>
         <button className={videoMuted ? "pill warn" : "pill"} onClick={onToggleVideo}>
-          {videoMuted ? "Cam off" : "Cam on"}
+          {videoMuted ? <VideoOff size={14} aria-hidden="true" /> : <Video size={14} aria-hidden="true" />}
+          <span>{videoMuted ? "Cam off" : "Cam on"}</span>
         </button>
         <button className={screenSharing ? "pill warn" : "pill"} onClick={onToggleScreen}>
-          {screenSharing ? "Stop Share" : "Share Screen"}
+          {screenSharing ? <ScreenShareOff size={14} aria-hidden="true" /> : <ScreenShare size={14} aria-hidden="true" />}
+          <span>{screenSharing ? "Stop Share" : "Share Screen"}</span>
         </button>
       </div>
 
@@ -104,6 +101,6 @@ export const CallDock = ({
           ))}
         </div>
       )}
-    </section>
+    </aside>
   );
 };

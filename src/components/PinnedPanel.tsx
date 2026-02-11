@@ -1,5 +1,6 @@
 import { Message, User } from "../types";
 import { renderMarkdown } from "../utils/markdown";
+import { X } from "lucide-react";
 
 interface PinnedPanelProps {
   pinned: Message[];
@@ -17,8 +18,8 @@ export const PinnedPanel = ({ pinned, users, onClose }: PinnedPanelProps) => {
           <p className="eyebrow">Pins</p>
           <h3>Saved messages</h3>
         </div>
-        <button className="icon-button" onClick={onClose}>
-          ✕
+        <button className="icon-button" aria-label="Close pins" onClick={onClose}>
+          <X size={14} aria-hidden="true" />
         </button>
       </div>
       <div className="pinned-list">
