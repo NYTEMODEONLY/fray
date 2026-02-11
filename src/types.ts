@@ -9,6 +9,7 @@ export interface User {
   avatarUrl?: string;
   status: UserStatus;
   roles: string[];
+  roleColor?: string;
 }
 
 export interface Reaction {
@@ -75,6 +76,18 @@ export interface ServerRoleSettings {
   adminLevel: number;
   moderatorLevel: number;
   defaultLevel: number;
+  definitions?: ServerRoleDefinition[];
+  memberRoleIds?: Record<string, string[]>;
+}
+
+export type ServerRolePermissionMap = Partial<Record<PermissionAction, boolean>>;
+
+export interface ServerRoleDefinition {
+  id: string;
+  name: string;
+  color: string;
+  powerLevel: number;
+  permissions?: ServerRolePermissionMap;
 }
 
 export interface ServerInviteSettings {

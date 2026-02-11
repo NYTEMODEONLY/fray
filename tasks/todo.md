@@ -340,3 +340,210 @@
 - [ ] Admin/moderation actions are role-gated and functional.
 - [ ] Hover/focus action model is clean, accessible, and touch-safe.
 - [ ] Cross-platform desktop quality bar met (macOS/Windows/Linux via Tauri).
+
+## Phase 8 - Discord Familiarity + Context Actions (2026-02-11)
+
+- [x] Add drag-and-drop channel/category reordering in left rail using existing Matrix-backed layout mutations.
+- [x] VERIFY: reorder categories/channels (including cross-category move) and confirm `com.fray.space_layout` updates survive reload.
+
+- [x] Redesign message hover interactions into a Discord-like floating action strip (no message height growth on hover).
+- [x] VERIFY: hover/focus/right-click message actions remain functional for react/reply/thread/pin/copy/delete.
+
+- [x] Upgrade timestamp treatment with relative + absolute context and preserve day separators.
+- [x] VERIFY: component tests confirm timestamp labeling for today/yesterday/older messages and separator rendering.
+
+- [x] Shift timeline visuals closer to IRC/Discord flow (row-based messages, remove boxed feel).
+- [x] VERIFY: message list regression tests pass for grouped/compact/search/mentions/unread states.
+
+- [x] Add right-click context menus for channels, members, and message rows.
+- [x] VERIFY: context actions execute expected outcomes (selection/copy/reorder/move) without breaking Matrix mode.
+
+- [x] Final quality gate for this pass.
+- [x] VERIFY: run `npm run test` and `npm run build` and record outcomes in this file.
+
+### Phase 8 Verification Log (2026-02-11)
+
+- Added drag-and-drop + right-click channel/category controls in `src/components/ChannelList.tsx` wired to Matrix-backed store mutations (`reorderCategory`, `reorderRoom`, `moveRoomToCategory`, `moveRoomByStep`, `moveCategoryByStep`).
+- Added right-click member context actions in `src/components/MemberList.tsx`.
+- Refactored message interactions in `src/components/MessageList.tsx`:
+  - floating Discord-like hover toolbar (no row expansion),
+  - message row right-click context menu,
+  - relative + absolute timestamp labels (`Today/Yesterday/...` + `Xm/Xh/Xd ago`).
+- Updated visual system in `src/index.css`:
+  - IRC-like row treatment,
+  - floating action toolbar styles,
+  - drag/drop affordances,
+  - shared context menu styling.
+- Added Phase 8 tests:
+  - `src/components/__tests__/channel-list-phase8.test.tsx`
+  - `src/components/__tests__/message-list-phase8.test.tsx`
+- Updated existing wiring/tests:
+  - `src/App.tsx`
+  - `src/components/__tests__/phase1-clickthrough.test.tsx`
+- Verification commands run:
+  - `npm run test` -> 54 passing tests (21/21 files).
+  - `npm run build` -> successful TypeScript + production build.
+
+### Phase 8 Hotfix - Channel Delete + Server Settings Access (2026-02-11)
+
+- [x] Add real channel delete action exposed from channel context menu.
+- [x] VERIFY: delete action removes channel from UI state, reselects a valid room, and keeps Matrix compatibility behavior.
+
+- [x] Fix server settings availability when homeserver has no `m.space` rooms.
+- [x] VERIFY: `All Rooms` fallback resolves to a real Matrix-backed settings host room so gear is enabled and settings tabs can open.
+
+- [x] Add regression tests for the hotfix.
+- [x] VERIFY: full suite/build pass.
+
+#### Hotfix Verification Log (2026-02-11)
+
+- Added `deleteRoom` store action:
+  - updates `com.fray.space_layout`,
+  - marks channel hidden via `com.fray.room_type` (`deleted: true`),
+  - removes local timeline/state references,
+  - leaves/forgets the room on Matrix client when available.
+- Added no-space server fallback in `buildSpaceIndex`:
+  - when no `m.space` exists, `All Rooms` now uses a real room id as settings/layout host so admin surfaces are not blocked on `spaceId === "all"`.
+- Wired delete action to channel context menu in `src/components/ChannelList.tsx`.
+- Added/updated tests:
+  - `src/store/__tests__/appStore.phase8.test.ts`
+  - `src/components/__tests__/channel-list-phase8.test.tsx`
+  - `src/components/__tests__/phase1-clickthrough.test.tsx`
+- Verification commands run:
+  - `npm run test` -> 56 passing tests (22/22 files).
+  - `npm run build` -> successful TypeScript + production build.
+
+## Phase 9 - Server Admin Correctness + Role System Foundations (2026-02-11)
+
+- [x] Fix no-`m.space` server settings host resolution so settings/actions persist in Matrix without mutating channel names.
+- [x] VERIFY: rename server in `All Rooms` updates server label only and survives reload.
+
+- [x] Fix channel delete flow in no-`m.space` mode (right-click delete must remove channel and persist hidden/deleted state).
+- [x] VERIFY: delete channel updates Matrix state and channel disappears after hard reload.
+
+- [x] Expand roles from power-level-only knobs to actual role definitions + member assignments (CRUD + assign/unassign).
+- [x] VERIFY: roles are creatable/editable/assignable in UI, persist to Matrix state, and rehydrate on reconnect.
+
+- [x] Wire role assignments into displayed member roles and permission snapshot inputs.
+- [x] VERIFY: assigned roles appear in member list/settings and permission calculations remain deterministic.
+
+- [x] Final quality gate.
+- [x] VERIFY: run `npm run test` and `npm run build` after Phase 9 changes.
+
+### Phase 9 Verification Log (2026-02-11)
+
+- Completed no-`m.space` server rename correctness:
+  - `renameSpace` now writes `com.fray.server_meta` in `All Rooms` context instead of renaming the first channel room.
+  - Added regression test coverage in `src/store/__tests__/appStore.phase9.test.ts`.
+- Hardened channel delete reliability for Matrix mode:
+  - room-level deleted marker write is now best-effort (non-blocking),
+  - layout update + local removal + leave/forget continue, preventing silent no-op delete failures.
+  - Matrix room selection now excludes left rooms (`join`/`invite` only) to prevent deleted/left channels reappearing.
+- Completed role system foundation:
+  - roles tab supports create/edit/delete (name, color, power level),
+  - members tab supports assign/unassign per-member role bindings,
+  - persisted via `ServerSettings.roles.definitions` + `ServerSettings.roles.memberRoleIds`.
+  - Added modal coverage in `src/components/__tests__/server-settings-modal.phase2.test.tsx`.
+- Permission model improvements:
+  - explicit `allow` permission overrides now actually allow actions,
+  - assigned custom roles now elevate effective power level for permission evaluation.
+  - Added service tests in `src/services/__tests__/permissionService.phase3.test.ts`.
+- Context menu usability hardening:
+  - added bounded scrollable context menus so destructive actions (Delete channel) remain reachable in long menus.
+- Verification commands run:
+  - `npm run test` -> 62 passing tests (23/23 files).
+  - `npm run build` -> successful TypeScript + production build.
+
+## Phase 9.1 - Discord Role/Permission Deep Dive + Role Editor Upgrade (2026-02-11)
+
+- [x] Add sourced deep-dive documentation for Discord role/permission resolution and Matrix mapping constraints.
+- [x] VERIFY: include official Discord + Matrix sources and a concrete Fray compatibility strategy.
+
+- [x] Upgrade Roles UI so assignment is available directly in Roles tab (not only Members tab).
+- [x] VERIFY: assign/unassign members from Roles tab and persist via server settings save.
+
+- [x] Add per-role permission toggles with persistence and evaluation support.
+- [x] VERIFY: saved roles carry permission grants and permission engine resolves grants deterministically.
+
+- [x] Final quality gate.
+- [x] VERIFY: run `npm run test` and `npm run build`.
+
+### Phase 9.1 Verification Log (2026-02-11)
+
+- Added deep-dive implementation note:
+  - `docs/discord-roles-permissions-deep-dive.md`
+  - includes official Discord permission algorithm references and Matrix `m.room.power_levels` mapping constraints.
+- Upgraded Roles tab UX in `src/components/ServerSettingsModal.tsx`:
+  - role list + detail panel,
+  - per-role permission toggle matrix,
+  - direct per-role member assignment section,
+  - role create/edit/delete and role-level power/color editing.
+- Extended role model persistence:
+  - `src/types.ts` now supports role permission maps on `ServerRoleDefinition`.
+  - `src/store/appStore.ts` normalizes and persists role permission maps via `com.fray.server_settings`.
+- Upgraded permission resolution in `src/services/permissionService.ts`:
+  - role permission grants can allow actions even when Matrix thresholds are stricter.
+- Added/updated tests:
+  - `src/components/__tests__/server-settings-modal.phase2.test.tsx`
+  - `src/services/__tests__/permissionService.phase3.test.ts`
+  - `src/store/__tests__/appStore.phase2.test.ts`
+- Verification commands run:
+  - `npm run test` -> 64 passing tests (23/23 files).
+  - `npm run build` -> successful TypeScript + production build.
+
+## Phase 9.2 - Member Profile Click + Highest Role Color Rendering (2026-02-11)
+
+- [x] Show user profile card on click from member list (Discord-like member interaction path).
+- [x] VERIFY: clicking a member opens a profile surface with identity + roles and can be dismissed.
+
+- [x] Render member/chat author names using highest assigned role color.
+- [x] VERIFY: assigned custom role color appears on names and updates through persisted server settings.
+
+- [x] Keep Matrix-backed persistence compatibility for role color derivation.
+- [x] VERIFY: role color comes from persisted `ServerSettings.roles.definitions/memberRoleIds` via store hydration paths.
+
+- [x] Final quality gate.
+- [x] VERIFY: run `npm run test` and `npm run build`.
+
+### Phase 9.2 Verification Log (2026-02-11)
+
+- Updated member interactions in `src/components/MemberList.tsx`:
+  - click member opens profile card with roles/profile summary,
+  - right-click context menu behavior preserved.
+- Added role-color rendering:
+  - member list names now use `user.roleColor`,
+  - message author names now use `author.roleColor`.
+- Updated store role application in `src/store/appStore.ts`:
+  - computes highest assigned role color and applies to user state,
+  - clears stale color when no role definitions remain,
+  - local space selection now reapplies server roles/colors for current space.
+- Added regression tests:
+  - `src/components/__tests__/member-list-phase9.test.tsx`
+- Verification commands run:
+  - `npm run test` -> 66 passing tests (24/24 files).
+  - `npm run build` -> successful TypeScript + production build.
+
+## Phase 9.3 - Idle First-Message Highlight Bugfix (2026-02-11)
+
+- [x] Investigate random first-message pulse + leading bar highlight.
+- [x] VERIFY: identify exact state path causing highlight when idle.
+
+- [x] Fix search result behavior for empty query + default filter so no implicit active result exists.
+- [x] VERIFY: message list has no active-search highlight/pulse when search is inactive.
+
+- [x] Add regression test coverage for search service behavior.
+- [x] VERIFY: run targeted and full test/build quality gates.
+
+### Phase 9.3 Verification Log (2026-02-11)
+
+- Root cause found:
+  - `buildSearchResultIds` returned all message IDs when `query === ""` and `filter === "all"`.
+  - App then treated first result as active search target, producing `search-active` left bar and occasional `focus-pulse`.
+- Fix implemented in `src/services/messagePresentationService.ts`:
+  - empty query + `all` filter now returns `[]`.
+- Added regression assertion in:
+  - `src/services/__tests__/messagePresentationService.phase4.test.ts`
+- Verification commands run:
+  - `npm run test -- src/services/__tests__/messagePresentationService.phase4.test.ts src/components/__tests__/message-list-phase4.test.tsx` -> passing.
+  - `npm run test` -> 66 passing tests (24/24 files).
+  - `npm run build` -> successful TypeScript + production build.

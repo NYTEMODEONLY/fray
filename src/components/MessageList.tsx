@@ -1,8 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { Message, User } from "../types";
 import { PermissionSnapshot } from "../services/permissionService";
 import { renderMarkdown } from "../utils/markdown";
-import { MoreHorizontal, SmilePlus } from "lucide-react";
+import {
+  CornerUpLeft,
+  Link2,
+  MessageCircle,
+  MoreHorizontal,
+  Pin,
+  Send,
+  SmilePlus,
+  Trash2
+} from "lucide-react";
 import {
   messageMentionsUser,
   RoomSearchFilter,
@@ -41,16 +56,15 @@ interface MessageListProps {
 
 const THREAD_GROUP_WINDOW_MS = 5 * 60 * 1000;
 const EMOJI_OPTIONS = ["👍", "❤️", "😂", "🔥", "🎉", "👀", "✅", "❌"];
+const CONTEXT_MENU_WIDTH = 220;
+const CONTEXT_MENU_HEIGHT = 260;
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 const formatTime = (timestamp: number) =>
   new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-const formatDate = (timestamp: number) =>
-  new Date(timestamp).toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric"
-  });
 
 const isSameDay = (left: number, right: number) => {
   const leftDate = new Date(left);
@@ -60,6 +74,54 @@ const isSameDay = (left: number, right: number) => {
     leftDate.getMonth() === rightDate.getMonth() &&
     leftDate.getDate() === rightDate.getDate()
   );
+};
+
+const isYesterday = (timestamp: number, nowTimestamp: number) => {
+  const yesterday = new Date(nowTimestamp);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return isSameDay(timestamp, yesterday.getTime());
+};
+
+const formatRelativeAge = (timestamp: number, nowTimestamp: number) => {
+  const delta = Math.max(nowTimestamp - timestamp, 0);
+  if (delta < MINUTE_MS) return "just now";
+  if (delta < HOUR_MS) return `${Math.max(1, Math.floor(delta / MINUTE_MS))}m ago`;
+  if (delta < DAY_MS) return `${Math.floor(delta / HOUR_MS)}h ago`;
+  if (delta < 7 * DAY_MS) return `${Math.floor(delta / DAY_MS)}d ago`;
+  return new Date(timestamp).toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+const formatMetaTimestamp = (timestamp: number, nowTimestamp: number) => {
+  const time = formatTime(timestamp);
+  if (isSameDay(timestamp, nowTimestamp)) return `Today at ${time}`;
+  if (isYesterday(timestamp, nowTimestamp)) return `Yesterday at ${time}`;
+  const target = new Date(timestamp);
+  const now = new Date(nowTimestamp);
+  const sameYear = target.getFullYear() === now.getFullYear();
+  const dateLabel = target.toLocaleDateString([], sameYear
+    ? { weekday: "short", month: "short", day: "numeric" }
+    : { weekday: "short", month: "short", day: "numeric", year: "numeric" }
+  );
+  return `${dateLabel} at ${time}`;
+};
+
+const formatDaySeparator = (timestamp: number, nowTimestamp: number) => {
+  if (isSameDay(timestamp, nowTimestamp)) return "Today";
+  if (isYesterday(timestamp, nowTimestamp)) return "Yesterday";
+  return new Date(timestamp).toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+};
+
+const clampMenuPoint = (x: number, y: number) => {
+  if (typeof window === "undefined") return { x, y };
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - CONTEXT_MENU_WIDTH)),
+    y: Math.max(8, Math.min(y, window.innerHeight - CONTEXT_MENU_HEIGHT))
+  };
 };
 
 export const MessageList = ({
@@ -98,7 +160,10 @@ export const MessageList = ({
   const [actionsOpenFor, setActionsOpenFor] = useState<string | null>(null);
   const [emojiPickerFor, setEmojiPickerFor] = useState<string | null>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const [contextMenu, setContextMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const messageMap = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const searchResultSet = useMemo(() => new Set(searchResultIds), [searchResultIds]);
   const unreadSeparatorIndex = useMemo(() => {
     if (unreadCount <= 0 || !messages.length) return -1;
@@ -129,6 +194,27 @@ export const MessageList = ({
       }),
     [messages, unreadSeparatorIndex]
   );
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNowTs(Date.now()), MINUTE_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setActionsOpenFor(null);
+      setEmojiPickerFor(null);
+      setContextMenu(null);
+    };
+    const handleResize = () => setContextMenu(null);
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const handleScroll = () => {
     const list = listRef.current;
@@ -181,11 +267,22 @@ export const MessageList = ({
     return () => window.clearTimeout(timeoutId);
   }, [focusMessageId, activeSearchResultId, onFocusHandled]);
 
-  const runAction = (handler: () => void) => {
-    handler();
+  const runAction = (handler: () => void | Promise<void>) => {
+    void Promise.resolve(handler()).catch(() => undefined);
     setActionsOpenFor(null);
     setEmojiPickerFor(null);
+    setContextMenu(null);
   };
+
+  const openMessageContextMenu = (event: ReactMouseEvent, messageId: string) => {
+    event.preventDefault();
+    const point = clampMenuPoint(event.clientX, event.clientY);
+    setContextMenu({ messageId, x: point.x, y: point.y });
+  };
+
+  const contextMessage = contextMenu ? messageMap.get(contextMenu.messageId) : undefined;
+  const canContextCopyLink = permissionSnapshot.membership === "join";
+  const canContextRedact = contextMessage ? canRedactMessage(contextMessage.authorId) : false;
 
   return (
     <div
@@ -224,12 +321,14 @@ export const MessageList = ({
         ]
           .filter(Boolean)
           .join(" ");
+        const absoluteMeta = formatMetaTimestamp(message.timestamp, nowTs);
+        const relativeMeta = formatRelativeAge(message.timestamp, nowTs);
 
         return (
           <div key={message.id}>
             {showDaySeparator && (
               <div className="message-day-separator">
-                <span>{formatDate(message.timestamp)}</span>
+                <span>{formatDaySeparator(message.timestamp, nowTs)}</span>
               </div>
             )}
             {showUnreadSeparator && (
@@ -242,6 +341,7 @@ export const MessageList = ({
                 messageNodeMapRef.current[message.id] = node;
               }}
               className={articleClasses}
+              onContextMenu={(event) => openMessageContextMenu(event, message.id)}
             >
               <div className={author?.id === meId ? "avatar me" : "avatar"}>
                 {groupedWithPrevious || messageDensity === "compact" ? (
@@ -255,10 +355,16 @@ export const MessageList = ({
               <div className="message-body">
                 {(!groupedWithPrevious || messageDensity === "compact") ? (
                   <div className="message-meta">
-                    <span className="message-author">{author?.name ?? "Unknown"}</span>
-                    <span className="message-time" title={new Date(message.timestamp).toLocaleString()}>
-                      {formatTime(message.timestamp)}
+                    <span
+                      className="message-author"
+                      style={author?.roleColor ? { color: author.roleColor } : undefined}
+                    >
+                      {author?.name ?? "Unknown"}
                     </span>
+                    <span className="message-time" title={new Date(message.timestamp).toLocaleString()}>
+                      {absoluteMeta}
+                    </span>
+                    <span className="message-time-relative">{relativeMeta}</span>
                     {message.status === "queued" && <span className="message-queued">queued</span>}
                     {message.pinned && <span className="message-pinned">pinned</span>}
                     <button
@@ -274,7 +380,8 @@ export const MessageList = ({
                   </div>
                 ) : (
                   <div className="message-sub-meta">
-                    <span>{formatTime(message.timestamp)}</span>
+                    <span title={absoluteMeta}>{formatTime(message.timestamp)}</span>
+                    <span className="message-time-relative">{relativeMeta}</span>
                     <button
                       className="message-more"
                       aria-label="Message actions"
@@ -287,6 +394,70 @@ export const MessageList = ({
                     </button>
                   </div>
                 )}
+
+                <div className="message-toolbar" role="toolbar" aria-label="Message actions">
+                  {permissionSnapshot.actions.react && (
+                    <div className="message-emoji-picker-wrap">
+                      <button
+                        className="toolbar-button"
+                        aria-label="Add reaction"
+                        onClick={() =>
+                          setEmojiPickerFor((current) => (current === message.id ? null : message.id))
+                        }
+                      >
+                        <SmilePlus size={14} aria-hidden="true" />
+                      </button>
+                      {emojiPickerFor === message.id && (
+                        <div className="message-emoji-picker">
+                          {EMOJI_OPTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => runAction(() => onReact(message.id, emoji))}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {permissionSnapshot.actions.send && (
+                    <>
+                      <button className="toolbar-button" aria-label="Reply" onClick={() => runAction(() => onReply(message.id))}>
+                        <CornerUpLeft size={14} aria-hidden="true" />
+                      </button>
+                      <button
+                        className="toolbar-button"
+                        aria-label="Quick Reply"
+                        onClick={() => runAction(() => onQuickReply(message.id))}
+                      >
+                        <Send size={14} aria-hidden="true" />
+                      </button>
+                      <button className="toolbar-button" aria-label="Thread" onClick={() => runAction(() => onThread(message.id))}>
+                        <MessageCircle size={14} aria-hidden="true" />
+                      </button>
+                    </>
+                  )}
+                  {permissionSnapshot.actions.pin && (
+                    <button
+                      className="toolbar-button"
+                      aria-label={message.pinned ? "Unpin" : "Pin"}
+                      onClick={() => runAction(() => onPin(message.id))}
+                    >
+                      <Pin size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                  {canCopyLink && (
+                    <button className="toolbar-button" aria-label="Copy Link" onClick={() => runAction(() => onCopyLink(message.id))}>
+                      <Link2 size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                  {canRedact && (
+                    <button className="toolbar-button danger" aria-label="Delete" onClick={() => runAction(() => onRedact(message.id))}>
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
 
                 {message.replyToId && (
                   <div className="message-reply">Replying to #{message.replyToId.slice(0, 4)}</div>
@@ -318,51 +489,6 @@ export const MessageList = ({
                     ))}
                   </div>
                 )}
-
-                <div className="message-actions">
-                  {permissionSnapshot.actions.react && (
-                    <div className="message-emoji-picker-wrap">
-                      <button
-                        aria-label="Add reaction"
-                        onClick={() =>
-                          setEmojiPickerFor((current) => (current === message.id ? null : message.id))
-                        }
-                      >
-                        <SmilePlus size={13} aria-hidden="true" />
-                      </button>
-                      {emojiPickerFor === message.id && (
-                        <div className="message-emoji-picker">
-                          {EMOJI_OPTIONS.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => runAction(() => onReact(message.id, emoji))}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {permissionSnapshot.actions.send && (
-                    <>
-                      <button onClick={() => runAction(() => onReply(message.id))}>Reply</button>
-                      <button onClick={() => runAction(() => onQuickReply(message.id))}>Quick Reply</button>
-                      <button onClick={() => runAction(() => onThread(message.id))}>Thread</button>
-                    </>
-                  )}
-                  {permissionSnapshot.actions.pin && (
-                    <button onClick={() => runAction(() => onPin(message.id))}>
-                      {message.pinned ? "Unpin" : "Pin"}
-                    </button>
-                  )}
-                  {canCopyLink && (
-                    <button onClick={() => runAction(() => onCopyLink(message.id))}>Copy Link</button>
-                  )}
-                  {canRedact && (
-                    <button onClick={() => runAction(() => onRedact(message.id))}>Delete</button>
-                  )}
-                </div>
 
                 {hasThreadReplies && (
                   <button className="message-thread-indicator" onClick={() => onThread(message.id)}>
@@ -398,6 +524,50 @@ export const MessageList = ({
         <button className="jump-to-latest" onClick={onJumpToLatest}>
           Jump to latest ({unreadCount})
         </button>
+      )}
+
+      {contextMenu && contextMessage && (
+        <div
+          className="context-menu-layer"
+          onMouseDown={() => setContextMenu(null)}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div
+            className="context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {permissionSnapshot.actions.send && (
+              <>
+                <button onClick={() => runAction(() => onReply(contextMessage.id))}>Reply</button>
+                <button onClick={() => runAction(() => onQuickReply(contextMessage.id))}>Quick Reply</button>
+                <button onClick={() => runAction(() => onThread(contextMessage.id))}>Thread</button>
+              </>
+            )}
+            {permissionSnapshot.actions.react && (
+              <button onClick={() => runAction(() => onReact(contextMessage.id, "👍"))}>
+                React with 👍
+              </button>
+            )}
+            {permissionSnapshot.actions.pin && (
+              <button onClick={() => runAction(() => onPin(contextMessage.id))}>
+                {contextMessage.pinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            {canContextCopyLink && (
+              <button onClick={() => runAction(() => onCopyLink(contextMessage.id))}>Copy Link</button>
+            )}
+            {canContextRedact && (
+              <button className="danger" onClick={() => runAction(() => onRedact(contextMessage.id))}>
+                Delete
+              </button>
+            )}
+            <div className="context-menu-separator" />
+            <button onClick={() => runAction(() => navigator.clipboard?.writeText(contextMessage.id))}>
+              Copy message ID
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

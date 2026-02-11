@@ -125,8 +125,42 @@ const resolveRule = (
 
 const applyRule = (base: boolean, rule: PermissionRule) => {
   if (rule === "deny") return false;
-  if (rule === "allow") return base;
+  if (rule === "allow") return true;
   return base;
+};
+
+const getRoleAssignedPowerLevel = (
+  userId: string,
+  roleSettings: ServerSettings["roles"]
+) => {
+  const definitions = roleSettings.definitions ?? [];
+  const roleIds = roleSettings.memberRoleIds?.[userId] ?? [];
+  const rolePowerById = new Map(definitions.map((role) => [role.id, role.powerLevel]));
+  const assignedPower = roleIds.reduce<number>((maxPower, roleId) => {
+    const rolePower = rolePowerById.get(roleId);
+    if (typeof rolePower !== "number" || !Number.isFinite(rolePower)) {
+      return maxPower;
+    }
+    return Math.max(maxPower, rolePower);
+  }, Number.NEGATIVE_INFINITY);
+  const defaultLevel = Number.isFinite(roleSettings.defaultLevel) ? roleSettings.defaultLevel : 0;
+  if (!Number.isFinite(assignedPower)) {
+    return defaultLevel;
+  }
+  return Math.max(defaultLevel, assignedPower);
+};
+
+const hasRolePermissionGrant = (
+  userId: string,
+  roleSettings: ServerSettings["roles"],
+  action: PermissionAction
+) => {
+  const assignedRoleIds = new Set(roleSettings.memberRoleIds?.[userId] ?? []);
+  if (!assignedRoleIds.size) return false;
+  return (roleSettings.definitions ?? []).some((role) => {
+    if (!assignedRoleIds.has(role.id)) return false;
+    return role.permissions?.[action] === true;
+  });
 };
 
 export const buildPermissionSnapshot = ({
@@ -137,12 +171,16 @@ export const buildPermissionSnapshot = ({
   categoryRules,
   roomRules
 }: BuildPermissionSnapshotInput): PermissionSnapshot => {
-  const powerLevel = getUserPowerLevel(powerLevels, userId);
+  const matrixPowerLevel = getUserPowerLevel(powerLevels, userId);
+  const roleAssignedPowerLevel = getRoleAssignedPowerLevel(userId, roleSettings);
+  const powerLevel = Math.max(matrixPowerLevel, roleAssignedPowerLevel);
   const role = deriveRole(membership, powerLevel, roleSettings);
 
   const actions = PERMISSION_ACTIONS.reduce<Record<PermissionAction, boolean>>((accumulator, action) => {
-    const base =
+    const matrixBase =
       membership === "join" && powerLevel >= getRequiredLevelForAction(action, powerLevels);
+    const roleGrant = membership === "join" && hasRolePermissionGrant(userId, roleSettings, action);
+    const base = matrixBase || roleGrant;
     const rule = resolveRule(action, categoryRules, roomRules);
     accumulator[action] = applyRule(base, rule);
     return accumulator;

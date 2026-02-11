@@ -41,7 +41,7 @@ const users: User[] = [
 const settings: ServerSettings = {
   version: 1,
   overview: { description: "Core build server", guidelines: "Ship daily." },
-  roles: { adminLevel: 100, moderatorLevel: 50, defaultLevel: 0 },
+  roles: { adminLevel: 100, moderatorLevel: 50, defaultLevel: 0, definitions: [], memberRoleIds: {} },
   invites: { linkExpiryHours: 24, requireApproval: false, allowGuestInvites: true },
   moderation: { safetyLevel: "members_only", blockUnknownMedia: false, auditLogRetentionDays: 30 }
 };
@@ -89,12 +89,184 @@ describe("Phase 2 server settings modal", () => {
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
       ...settings,
+      roles: {
+        ...settings.roles,
+        definitions: [],
+        memberRoleIds: {}
+      },
       invites: {
         linkExpiryHours: 72,
         requireApproval: true,
         allowGuestInvites: false
       }
     });
+  });
+
+  it("creates roles and persists role definitions from the Roles tab", async () => {
+    const user = userEvent.setup();
+    const onSaveSettings = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ServerSettingsModal
+        space={space}
+        rooms={rooms}
+        categories={categories}
+        settings={settings}
+        permissionOverrides={{ version: 1, categories: {}, rooms: {} }}
+        moderationAudit={[]}
+        canManageChannels={true}
+        users={users}
+        activeTab="roles"
+        onTabChange={vi.fn()}
+        onClose={vi.fn()}
+        onRenameSpace={vi.fn().mockResolvedValue(undefined)}
+        onSaveSettings={onSaveSettings}
+        onSetCategoryPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onSetRoomPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
+        onRenameCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    await user.type(screen.getByPlaceholderText("new-role"), "Operator");
+    await user.clear(screen.getByLabelText("Role power level"));
+    await user.type(screen.getByLabelText("Role power level"), "80");
+    await user.click(screen.getByRole("button", { name: "Create Role" }));
+    await user.click(screen.getByLabelText("Manage Channels"));
+    await user.click(screen.getByRole("button", { name: "Save Roles" }));
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roles: expect.objectContaining({
+          definitions: expect.arrayContaining([
+            expect.objectContaining({
+              name: "Operator",
+              powerLevel: 80,
+              permissions: expect.objectContaining({
+                manageChannels: true
+              })
+            })
+          ]),
+          memberRoleIds: {}
+        })
+      })
+    );
+  });
+
+  it("assigns custom roles to members and persists assignments", async () => {
+    const user = userEvent.setup();
+    const onSaveSettings = vi.fn().mockResolvedValue(undefined);
+    const roleAwareSettings: ServerSettings = {
+      ...settings,
+      roles: {
+        ...settings.roles,
+        definitions: [{ id: "ops", name: "Operator", color: "#7d8cff", powerLevel: 70 }],
+        memberRoleIds: {}
+      }
+    };
+
+    render(
+      <ServerSettingsModal
+        space={space}
+        rooms={rooms}
+        categories={categories}
+        settings={roleAwareSettings}
+        permissionOverrides={{ version: 1, categories: {}, rooms: {} }}
+        moderationAudit={[]}
+        canManageChannels={true}
+        users={users}
+        activeTab="members"
+        onTabChange={vi.fn()}
+        onClose={vi.fn()}
+        onRenameSpace={vi.fn().mockResolvedValue(undefined)}
+        onSaveSettings={onSaveSettings}
+        onSetCategoryPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onSetRoomPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
+        onRenameCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    await user.click(screen.getAllByLabelText("Operator")[0]);
+    await user.click(screen.getByRole("button", { name: "Save Member Roles" }));
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roles: expect.objectContaining({
+          memberRoleIds: {
+            "@me:example.com": ["ops"]
+          }
+        })
+      })
+    );
+  });
+
+  it("assigns members directly from the Roles tab manage-members section", async () => {
+    const user = userEvent.setup();
+    const onSaveSettings = vi.fn().mockResolvedValue(undefined);
+    const roleAwareSettings: ServerSettings = {
+      ...settings,
+      roles: {
+        ...settings.roles,
+        definitions: [{ id: "ops", name: "Operator", color: "#7d8cff", powerLevel: 70 }],
+        memberRoleIds: {}
+      }
+    };
+
+    render(
+      <ServerSettingsModal
+        space={space}
+        rooms={rooms}
+        categories={categories}
+        settings={roleAwareSettings}
+        permissionOverrides={{ version: 1, categories: {}, rooms: {} }}
+        moderationAudit={[]}
+        canManageChannels={true}
+        users={users}
+        activeTab="roles"
+        onTabChange={vi.fn()}
+        onClose={vi.fn()}
+        onRenameSpace={vi.fn().mockResolvedValue(undefined)}
+        onSaveSettings={onSaveSettings}
+        onSetCategoryPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onSetRoomPermissionRule={vi.fn().mockResolvedValue(undefined)}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
+        onRenameCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    await user.click(screen.getByLabelText("Assign Operator to me"));
+    await user.click(screen.getByRole("button", { name: "Save Roles" }));
+
+    expect(onSaveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roles: expect.objectContaining({
+          memberRoleIds: {
+            "@me:example.com": ["ops"]
+          }
+        })
+      })
+    );
   });
 
   it("wires channel/category management controls in the Channels tab", async () => {

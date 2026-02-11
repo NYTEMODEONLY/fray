@@ -130,7 +130,28 @@ describe("Phase 2 store layout and settings", () => {
       roles: {
         adminLevel: 120,
         moderatorLevel: 55,
-        defaultLevel: -4
+        defaultLevel: -4,
+        definitions: [
+          {
+            id: "ops",
+            name: "Ops",
+            color: "#123456",
+            powerLevel: 55,
+            permissions: {
+              manageChannels: true,
+              invite: true
+            }
+          },
+          {
+            id: "ops",
+            name: "Duplicate",
+            color: "#ffffff",
+            powerLevel: 10
+          }
+        ],
+        memberRoleIds: {
+          "@me:example.com": ["ops", "missing-role"]
+        }
       },
       invites: {
         linkExpiryHours: 400,
@@ -148,6 +169,19 @@ describe("Phase 2 store layout and settings", () => {
     const saved = useAppStore.getState().serverSettingsBySpaceId[space.id];
     expect(saved.roles.adminLevel).toBe(100);
     expect(saved.roles.defaultLevel).toBe(0);
+    expect(saved.roles.definitions).toHaveLength(1);
+    expect(saved.roles.definitions?.[0]).toEqual(
+      expect.objectContaining({
+        id: "ops",
+        permissions: {
+          manageChannels: true,
+          invite: true
+        }
+      })
+    );
+    expect(saved.roles.memberRoleIds).toEqual({
+      "@me:example.com": ["ops"]
+    });
     expect(saved.invites.linkExpiryHours).toBe(168);
     expect(saved.moderation.auditLogRetentionDays).toBe(7);
     expect(saved.moderation.safetyLevel).toBe("strict");

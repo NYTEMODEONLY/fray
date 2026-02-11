@@ -4,7 +4,9 @@ import { buildPermissionSnapshot, canRedactMessage, parsePowerLevels } from "../
 const roleSettings = {
   adminLevel: 100,
   moderatorLevel: 50,
-  defaultLevel: 0
+  defaultLevel: 0,
+  definitions: [],
+  memberRoleIds: {}
 };
 
 const basePowerLevels = parsePowerLevels({
@@ -95,6 +97,85 @@ describe("Phase 3 permission service", () => {
 
     expect(snapshot.actions.send).toBe(true);
     expect(snapshot.actions.pin).toBe(false);
+  });
+
+  it("respects explicit allow overrides when base permissions are false", () => {
+    const snapshot = buildPermissionSnapshot({
+      userId: "@member:example.com",
+      membership: "join",
+      powerLevels: basePowerLevels,
+      roleSettings,
+      categoryRules: {
+        pin: "allow"
+      }
+    });
+
+    expect(snapshot.actions.pin).toBe(true);
+  });
+
+  it("elevates effective power level from assigned custom roles", () => {
+    const snapshot = buildPermissionSnapshot({
+      userId: "@member:example.com",
+      membership: "join",
+      powerLevels: basePowerLevels,
+      roleSettings: {
+        ...roleSettings,
+        definitions: [{ id: "ops", name: "Operator", color: "#7d8cff", powerLevel: 80 }],
+        memberRoleIds: {
+          "@member:example.com": ["ops"]
+        }
+      }
+    });
+
+    expect(snapshot.powerLevel).toBe(80);
+    expect(snapshot.role).toBe("moderator");
+    expect(snapshot.actions.manageChannels).toBe(true);
+  });
+
+  it("grants action permissions from assigned role permission toggles", () => {
+    const strictPowerLevels = parsePowerLevels({
+      users_default: 0,
+      users: {
+        "@member:example.com": 0
+      },
+      events_default: 50,
+      events: {
+        "m.room.message": 50,
+        "m.reaction": 50,
+        "m.room.pinned_events": 50
+      },
+      invite: 50,
+      redact: 50,
+      state_default: 50
+    });
+
+    const snapshot = buildPermissionSnapshot({
+      userId: "@member:example.com",
+      membership: "join",
+      powerLevels: strictPowerLevels,
+      roleSettings: {
+        ...roleSettings,
+        definitions: [
+          {
+            id: "builder",
+            name: "Builder",
+            color: "#7d8cff",
+            powerLevel: 0,
+            permissions: {
+              manageChannels: true,
+              invite: true
+            }
+          }
+        ],
+        memberRoleIds: {
+          "@member:example.com": ["builder"]
+        }
+      }
+    });
+
+    expect(snapshot.actions.manageChannels).toBe(true);
+    expect(snapshot.actions.invite).toBe(true);
+    expect(snapshot.actions.send).toBe(false);
   });
 
   it("allows own-message redaction for members but blocks redacting others", () => {

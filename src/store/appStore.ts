@@ -29,6 +29,7 @@ import {
   PermissionRuleSet,
   Room,
   RoomType,
+  ServerRoleDefinition,
   ServerSettings,
   Space,
   SpacePermissionOverrides,
@@ -43,6 +44,7 @@ const ROOM_TYPE_EVENT = "com.fray.room_type";
 const PREFERENCES_KEY = "fray.preferences";
 const SPACE_LAYOUT_EVENT = "com.fray.space_layout";
 const SERVER_SETTINGS_EVENT = "com.fray.server_settings";
+const SERVER_META_EVENT = "com.fray.server_meta";
 const PERMISSION_OVERRIDES_EVENT = "com.fray.permission_overrides";
 const AUDIT_LOG_EVENT = "com.fray.audit_log";
 const DEFAULT_CATEGORY_ID = "channels";
@@ -142,6 +144,7 @@ interface AppState {
   notifications: NotificationItem[];
   categoriesBySpaceId: Record<string, Category[]>;
   spaceLayoutsBySpaceId: Record<string, SpaceLayout>;
+  spaceStateHostRoomIdBySpaceId: Record<string, string>;
   serverSettingsBySpaceId: Record<string, ServerSettings>;
   permissionOverridesBySpaceId: Record<string, SpacePermissionOverrides>;
   moderationAuditBySpaceId: Record<string, ModerationAuditEvent[]>;
@@ -186,6 +189,7 @@ interface AppState {
   markRoomRead: (roomId?: string) => void;
   sendMessage: (payload: { body: string; attachments?: Attachment[]; threadRootId?: string }) => Promise<void>;
   createRoom: (payload: { name: string; type: RoomType; category?: string }) => Promise<void>;
+  deleteRoom: (roomId: string) => Promise<void>;
   createSpace: (name: string) => Promise<void>;
   renameSpace: (spaceId: string, name: string) => Promise<void>;
   saveServerSettings: (spaceId: string, settings: ServerSettings) => Promise<void>;
@@ -462,6 +466,11 @@ const mapMatrixRoom = (
   };
 };
 
+const isRoomDeleted = (room: MatrixRoom) => {
+  const typeEvent = room.currentState.getStateEvents(ROOM_TYPE_EVENT, "");
+  return typeEvent?.getContent()?.deleted === true;
+};
+
 const createDefaultLayout = (): SpaceLayout => ({
   version: 1,
   categories: [{ id: DEFAULT_CATEGORY_ID, name: DEFAULT_CATEGORY_NAME, order: 0 }],
@@ -477,7 +486,9 @@ const createDefaultServerSettings = (): ServerSettings => ({
   roles: {
     adminLevel: 100,
     moderatorLevel: 50,
-    defaultLevel: 0
+    defaultLevel: 0,
+    definitions: [],
+    memberRoleIds: {}
   },
   invites: {
     linkExpiryHours: 24,
@@ -490,6 +501,108 @@ const createDefaultServerSettings = (): ServerSettings => ({
     auditLogRetentionDays: 30
   }
 });
+
+const normalizeRoleDefinitions = (value: unknown): ServerRoleDefinition[] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const normalizeRolePermissions = (
+    input: unknown
+  ): Partial<Record<PermissionAction, boolean>> => {
+    if (!input || typeof input !== "object") return {};
+    const raw = input as Record<string, unknown>;
+    return PERMISSION_ACTIONS.reduce<Partial<Record<PermissionAction, boolean>>>(
+      (accumulator, action) => {
+        if (typeof raw[action] === "boolean") {
+          accumulator[action] = raw[action] as boolean;
+        }
+        return accumulator;
+      },
+      {}
+    );
+  };
+  return value
+    .filter((item) => item && typeof item === "object")
+    .map((item) => item as Record<string, unknown>)
+    .map((item) => {
+      const id = typeof item.id === "string" && item.id.trim() ? item.id.trim() : uid("role");
+      const name = typeof item.name === "string" && item.name.trim() ? item.name.trim() : "Role";
+      const color = typeof item.color === "string" && /^#[0-9a-fA-F]{6}$/.test(item.color) ? item.color : "#8b93a7";
+      const powerLevel =
+        typeof item.powerLevel === "number" && Number.isFinite(item.powerLevel)
+          ? clampNumber(item.powerLevel, 0, 100)
+          : 0;
+      const permissions = normalizeRolePermissions(item.permissions);
+      return { id, name, color, powerLevel, permissions };
+    })
+    .filter((role) => {
+      if (seen.has(role.id)) return false;
+      seen.add(role.id);
+      return true;
+    });
+};
+
+const normalizeRoleAssignments = (
+  value: unknown,
+  validRoleIds: Set<string>
+): Record<string, string[]> => {
+  if (!value || typeof value !== "object") return {};
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string[]>>(
+    (accumulator, [userId, rawRoleIds]) => {
+      if (!Array.isArray(rawRoleIds)) return accumulator;
+      const roleIds = rawRoleIds
+        .filter((roleId): roleId is string => typeof roleId === "string")
+        .filter((roleId, index, array) => array.indexOf(roleId) === index)
+        .filter((roleId) => validRoleIds.has(roleId));
+      if (roleIds.length) {
+        accumulator[userId] = roleIds;
+      }
+      return accumulator;
+    },
+    {}
+  );
+};
+
+const applyServerRolesToUsers = (users: User[], settings: ServerSettings): User[] => {
+  const roleDefinitions = settings.roles.definitions ?? [];
+  const roleNameById = new Map(roleDefinitions.map((role) => [role.id, role.name]));
+  const roleById = new Map(roleDefinitions.map((role) => [role.id, role]));
+  const memberRoleIds = settings.roles.memberRoleIds ?? {};
+
+  return users.map((user) => {
+    const assignedRoleIds = memberRoleIds[user.id] ?? [];
+    const customRoleNames = assignedRoleIds
+      .map((roleId) => roleNameById.get(roleId))
+      .filter((roleName): roleName is string => Boolean(roleName));
+    const highestRole = assignedRoleIds
+      .map((roleId) => roleById.get(roleId))
+      .filter((role): role is ServerRoleDefinition => Boolean(role))
+      .sort((left, right) => right.powerLevel - left.powerLevel)[0];
+    const mergedRoles = Array.from(new Set([...user.roles, ...customRoleNames]));
+    return {
+      ...user,
+      roles: mergedRoles,
+      roleColor: highestRole?.color
+    };
+  });
+};
+
+const stripServerRolesFromUsers = (users: User[], settings: ServerSettings): User[] => {
+  const customRoleNames = new Set((settings.roles.definitions ?? []).map((role) => role.name));
+  if (!customRoleNames.size) {
+    return users.map((user) => ({
+      ...user,
+      roleColor: undefined
+    }));
+  }
+  return users.map((user) => ({
+    ...user,
+    roles: user.roles.filter((role) => !customRoleNames.has(role)),
+    roleColor: undefined
+  }));
+};
+
+const withAppliedServerRoles = (users: User[], settings: ServerSettings) =>
+  applyServerRolesToUsers(stripServerRolesFromUsers(users, settings), settings);
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -508,6 +621,9 @@ const normalizeServerSettings = (settings: Partial<ServerSettings> | null | unde
     moderation.safetyLevel === "strict"
       ? moderation.safetyLevel
       : defaults.moderation.safetyLevel;
+  const roleDefinitions = normalizeRoleDefinitions(roles.definitions);
+  const validRoleIds = new Set(roleDefinitions.map((role) => role.id));
+  const memberRoleIds = normalizeRoleAssignments(roles.memberRoleIds, validRoleIds);
 
   return {
     version: 1,
@@ -530,7 +646,9 @@ const normalizeServerSettings = (settings: Partial<ServerSettings> | null | unde
         typeof roles.defaultLevel === "number" ? roles.defaultLevel : defaults.roles.defaultLevel,
         0,
         100
-      )
+      ),
+      definitions: roleDefinitions,
+      memberRoleIds
     },
     invites: {
       linkExpiryHours: clampNumber(
@@ -787,6 +905,16 @@ const parseServerSettings = (spaceRoom: MatrixRoom | null | undefined): ServerSe
   return normalizeServerSettings(content as Partial<ServerSettings>);
 };
 
+const parseServerMetaName = (spaceRoom: MatrixRoom | null | undefined): string | null => {
+  if (!spaceRoom) return null;
+  const event = spaceRoom.currentState.getStateEvents(SERVER_META_EVENT, "");
+  const content = event?.getContent();
+  const name = content?.name;
+  if (typeof name !== "string") return null;
+  const trimmed = name.trim();
+  return trimmed || null;
+};
+
 const parsePermissionOverrides = (spaceRoom: MatrixRoom | null | undefined): SpacePermissionOverrides | null => {
   if (!spaceRoom) return null;
   const event = spaceRoom.currentState.getStateEvents(PERMISSION_OVERRIDES_EVENT, "");
@@ -902,6 +1030,25 @@ const setRoomOrderForCategory = (layout: SpaceLayout, categoryId: string, roomId
   roomIds.forEach((roomId, order) => {
     layout.rooms[roomId] = { categoryId, order };
   });
+};
+
+const resolveSpaceStateHostRoomId = (
+  state: Pick<AppState, "currentRoomId" | "rooms" | "spaceStateHostRoomIdBySpaceId">,
+  spaceId: string
+) => {
+  if (!spaceId) return null;
+  if (spaceId !== DEFAULT_SPACE.id) return spaceId;
+
+  const mappedHost = state.spaceStateHostRoomIdBySpaceId[spaceId];
+  if (mappedHost) return mappedHost;
+
+  const currentRoom = state.rooms.find((room) => room.id === state.currentRoomId);
+  if (currentRoom) return currentRoom.id;
+
+  const firstNonDm = state.rooms.find((room) => room.type !== "dm");
+  if (firstNonDm) return firstNonDm.id;
+
+  return state.rooms[0]?.id ?? null;
 };
 
 const mapEventsToMessages = (client: MatrixClient, room: MatrixRoom): Message[] => {
@@ -1081,6 +1228,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   notifications: [],
   categoriesBySpaceId: {},
   spaceLayoutsBySpaceId: {},
+  spaceStateHostRoomIdBySpaceId: {},
   serverSettingsBySpaceId: defaultServerSettingsBySpace,
   permissionOverridesBySpaceId: defaultPermissionOverridesBySpace,
   moderationAuditBySpaceId: defaultModerationAuditBySpace,
@@ -1160,14 +1308,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (
           eventType !== SPACE_LAYOUT_EVENT &&
           eventType !== SERVER_SETTINGS_EVENT &&
+          eventType !== SERVER_META_EVENT &&
           eventType !== PERMISSION_OVERRIDES_EVENT &&
           eventType !== AUDIT_LOG_EVENT
         ) {
           return;
         }
         const roomId = event.getRoomId();
-        const currentSpaceId = get().currentSpaceId;
-        if (!roomId || roomId !== currentSpaceId) return;
+        const currentState = get();
+        const currentSpaceId = currentState.currentSpaceId;
+        const currentStateHostId = resolveSpaceStateHostRoomId(currentState, currentSpaceId);
+        if (!roomId || !currentStateHostId || roomId !== currentStateHostId) return;
         get().selectSpace(currentSpaceId);
       });
 
@@ -1247,6 +1398,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       serverSettingsTab: "overview",
       categoriesBySpaceId: {},
       spaceLayoutsBySpaceId: {},
+      spaceStateHostRoomIdBySpaceId: {},
       serverSettingsBySpaceId: defaultServerSettingsBySpace,
       permissionOverridesBySpaceId: defaultPermissionOverridesBySpace,
       moderationAuditBySpaceId: defaultModerationAuditBySpace,
@@ -1276,9 +1428,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => {
         const nextRoomId = state.rooms.find((room) => room.spaceId === spaceId)?.id ?? state.currentRoomId;
         const nextRoomMessages = state.messagesByRoomId[nextRoomId] ?? [];
+        const normalizedServerSettings = normalizeServerSettings(
+          state.serverSettingsBySpaceId[spaceId] ?? null
+        );
+        const nextUsers = withAppliedServerRoles(state.users, normalizedServerSettings);
+        const nextMe = nextUsers.find((user) => user.id === state.me.id) ?? state.me;
         return {
           currentSpaceId: spaceId,
           currentRoomId: nextRoomId,
+          users: nextUsers,
+          me: nextMe,
+          spaceStateHostRoomIdBySpaceId: {
+            ...state.spaceStateHostRoomIdBySpaceId,
+            [spaceId]: nextRoomId
+          },
           categoriesBySpaceId: {
             ...state.categoriesBySpaceId,
             [spaceId]: layoutToCategories(
@@ -1297,7 +1460,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
           serverSettingsBySpaceId: {
             ...state.serverSettingsBySpaceId,
-            [spaceId]: normalizeServerSettings(state.serverSettingsBySpaceId[spaceId] ?? null)
+            [spaceId]: normalizedServerSettings
           },
           permissionOverridesBySpaceId: {
             ...state.permissionOverridesBySpaceId,
@@ -1327,6 +1490,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       .getRooms()
       .filter((room) => room.getType() !== "m.space")
       .filter((room) => {
+        const membership =
+          typeof room.getMyMembership === "function" ? room.getMyMembership() : "join";
+        return membership === "join" || membership === "invite";
+      })
+      .filter((room) => !isRoomDeleted(room))
+      .filter((room) => {
         if (targetSpace.id === DEFAULT_SPACE.id && spaces.length === 0) return true;
         const allowed = children.get(targetSpace.id);
         if (!allowed || allowed.size === 0) return true;
@@ -1334,12 +1503,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
       .map((room) => mapMatrixRoom(client, room, targetSpace.id, directRoomIds));
 
-    const spaceRoom = targetSpace.id === DEFAULT_SPACE.id ? null : client.getRoom(targetSpace.id);
-    const parsedLayout = parseSpaceLayout(spaceRoom);
+    const spaceStateHostRoomId =
+      targetSpace.id === DEFAULT_SPACE.id
+        ? mappedRooms.find((room) => room.type !== "dm")?.id ?? mappedRooms[0]?.id ?? null
+        : targetSpace.id;
+    const spaceStateHostRoom = spaceStateHostRoomId ? client.getRoom(spaceStateHostRoomId) : null;
+
+    const parsedLayout = parseSpaceLayout(spaceStateHostRoom);
     const hydratedLayout = hydrateLayoutForRooms(parsedLayout, mappedRooms);
-    const parsedServerSettings = parseServerSettings(spaceRoom);
-    const parsedPermissionOverrides = parsePermissionOverrides(spaceRoom);
-    const parsedModerationAudit = parseModerationAudit(spaceRoom);
+    const parsedServerSettings = parseServerSettings(spaceStateHostRoom);
+    const parsedPermissionOverrides = parsePermissionOverrides(spaceStateHostRoom);
+    const parsedModerationAudit = parseModerationAudit(spaceStateHostRoom);
+    const parsedServerMetaName = parseServerMetaName(spaceStateHostRoom);
     const rooms = applyLayoutToRooms(mappedRooms, hydratedLayout);
     const categories = layoutToCategories(hydratedLayout);
     const serverSettings = normalizeServerSettings(
@@ -1351,10 +1526,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     const moderationAudit = normalizeAuditEvents(
       parsedModerationAudit ?? get().moderationAuditBySpaceId[targetSpace.id] ?? []
     );
+    const nextSpaces = availableSpaces.map((space) => {
+      if (space.id !== targetSpace.id) return space;
+      const nextName = parsedServerMetaName ?? space.name;
+      return {
+        ...space,
+        name: nextName,
+        icon: (nextName || space.icon || "S").slice(0, 1).toUpperCase()
+      };
+    });
 
     const nextRoomId = rooms[0]?.id ?? "";
     set((state) => ({
-      spaces: availableSpaces,
+      spaces: nextSpaces,
       rooms,
       currentSpaceId: targetSpace.id,
       currentRoomId: nextRoomId,
@@ -1365,6 +1549,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       spaceLayoutsBySpaceId: {
         ...state.spaceLayoutsBySpaceId,
         [targetSpace.id]: hydratedLayout
+      },
+      spaceStateHostRoomIdBySpaceId: {
+        ...state.spaceStateHostRoomIdBySpaceId,
+        [targetSpace.id]: spaceStateHostRoomId ?? ""
       },
       serverSettingsBySpaceId: {
         ...state.serverSettingsBySpaceId,
@@ -1437,9 +1625,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           state.profileDisplayName,
           state.profileAvatarDataUrl
         );
+        const roomSpaceId =
+          state.rooms.find((roomItem) => roomItem.id === roomId)?.spaceId ?? state.currentSpaceId;
+        const roomServerSettings = normalizeServerSettings(state.serverSettingsBySpaceId[roomSpaceId] ?? null);
+        const nextUsersWithRoles = withAppliedServerRoles(nextUsers, roomServerSettings);
+        const nextMeWithRoles = nextUsersWithRoles.find((user) => user.id === nextMe.id) ?? nextMe;
         return {
-          users: nextUsers,
-          me: nextMe
+          users: nextUsersWithRoles,
+          me: nextMeWithRoles
         };
       })(),
       currentRoomId: roomId,
@@ -1827,10 +2020,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       await client.setRoomTag(room_id, category.trim(), { order: 0 });
     }
 
-    const spaceId = get().currentSpaceId;
-    if (spaceId !== DEFAULT_SPACE.id) {
-      const state = get();
-      const existingLayout = state.spaceLayoutsBySpaceId[spaceId] ?? createDefaultLayout();
+    const state = get();
+    const logicalSpaceId = state.currentSpaceId;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, logicalSpaceId);
+    if (logicalSpaceId && spaceStateHostRoomId) {
+      const existingLayout = state.spaceLayoutsBySpaceId[logicalSpaceId] ?? createDefaultLayout();
       const nextLayout = {
         ...existingLayout,
         categories: [...existingLayout.categories],
@@ -1856,22 +2050,149 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
 
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
         set((current) => ({
           spaceLayoutsBySpaceId: {
             ...current.spaceLayoutsBySpaceId,
-            [spaceId]: nextLayout
+            [logicalSpaceId]: nextLayout
           },
           categoriesBySpaceId: {
             ...current.categoriesBySpaceId,
-            [spaceId]: layoutToCategories(nextLayout)
+            [logicalSpaceId]: layoutToCategories(nextLayout)
+          },
+          spaceStateHostRoomIdBySpaceId: {
+            ...current.spaceStateHostRoomIdBySpaceId,
+            [logicalSpaceId]: spaceStateHostRoomId
           }
         }));
       } catch (error) {
         get().pushNotification("Failed to update channel layout", (error as Error).message);
       }
     }
-    get().selectSpace(spaceId);
+    get().selectSpace(logicalSpaceId);
+  },
+  deleteRoom: async (roomId) => {
+    const state = get();
+    const room = state.rooms.find((candidate) => candidate.id === roomId);
+    if (!room || room.type === "dm") return;
+
+    const spaceId = room.spaceId;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(
+      { ...state, currentRoomId: roomId },
+      spaceId
+    );
+    if (!spaceId || !spaceStateHostRoomId) {
+      get().pushNotification(
+        "Channel delete unavailable",
+        "Select a server context before deleting channels."
+      );
+      return;
+    }
+
+    const categoryId = room.category ?? DEFAULT_CATEGORY_ID;
+    const remainingSpaceRooms = getSpaceRooms(state.rooms, spaceId).filter(
+      (candidate) => candidate.id !== roomId
+    );
+    const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, remainingSpaceRooms);
+    const nextLayout: SpaceLayout = {
+      ...baseLayout,
+      categories: [...baseLayout.categories],
+      rooms: { ...baseLayout.rooms }
+    };
+
+    const remainingRoomIds = getOrderedRoomIdsByCategory(nextLayout, categoryId).filter(
+      (candidateRoomId) => candidateRoomId !== roomId
+    );
+    setRoomOrderForCategory(nextLayout, categoryId, remainingRoomIds);
+    delete nextLayout.rooms[roomId];
+
+    const client = state.matrixClient;
+    if (client) {
+      try {
+        const typeEvent = client.getRoom(roomId)?.currentState.getStateEvents(ROOM_TYPE_EVENT, "");
+        const existingType = typeEvent?.getContent()?.type as RoomType | undefined;
+        await client.sendStateEvent(
+          roomId,
+          ROOM_TYPE_EVENT as any,
+          {
+            type: existingType ?? room.type,
+            deleted: true
+          },
+          ""
+        );
+      } catch (error) {
+        console.warn("Unable to set deleted marker on room; proceeding with leave/layout update", error);
+      }
+
+      try {
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+      } catch (error) {
+        get().pushNotification("Failed to delete channel", (error as Error).message);
+        return;
+      }
+    }
+
+    set((current) => {
+      const nextRooms = current.rooms.filter((candidate) => candidate.id !== roomId);
+      const nextSpaceRooms = getSpaceRooms(nextRooms, spaceId);
+      const appliedRooms = applyLayoutToSpaceRooms(nextRooms, spaceId, nextLayout);
+      const fallbackRoomId = nextSpaceRooms[0]?.id ?? appliedRooms[0]?.id ?? "";
+      const fallbackHostRoomId =
+        nextSpaceRooms.find((candidate) => candidate.type !== "dm")?.id ?? fallbackRoomId;
+      const nextCurrentRoomId =
+        current.currentRoomId === roomId ? fallbackRoomId : current.currentRoomId;
+      const currentRoomWasDeleted = current.currentRoomId === roomId;
+      const fallbackRoom = appliedRooms.find((candidate) => candidate.id === nextCurrentRoomId);
+      const nextCurrentSpaceId = currentRoomWasDeleted
+        ? fallbackRoom?.spaceId ?? current.currentSpaceId
+        : current.currentSpaceId;
+      const currentStateHostRoomId = current.spaceStateHostRoomIdBySpaceId[spaceId];
+      const nextStateHostRoomId =
+        currentStateHostRoomId === roomId ? fallbackHostRoomId : currentStateHostRoomId;
+      const nextMessagesByRoomId = { ...current.messagesByRoomId };
+      const nextRoomLastReadTsByRoomId = { ...current.roomLastReadTsByRoomId };
+      const nextThreadLastViewedTsByRoomId = { ...current.threadLastViewedTsByRoomId };
+      const nextHistoryLoadingByRoomId = { ...current.historyLoadingByRoomId };
+      const nextHistoryHasMoreByRoomId = { ...current.historyHasMoreByRoomId };
+      delete nextMessagesByRoomId[roomId];
+      delete nextRoomLastReadTsByRoomId[roomId];
+      delete nextThreadLastViewedTsByRoomId[roomId];
+      delete nextHistoryLoadingByRoomId[roomId];
+      delete nextHistoryHasMoreByRoomId[roomId];
+
+      return {
+        rooms: appliedRooms,
+        currentSpaceId: nextCurrentSpaceId,
+        currentRoomId: nextCurrentRoomId,
+        replyToId: currentRoomWasDeleted ? null : current.replyToId,
+        threadRootId: currentRoomWasDeleted ? null : current.threadRootId,
+        showThread: currentRoomWasDeleted ? false : current.showThread,
+        messagesByRoomId: nextMessagesByRoomId,
+        roomLastReadTsByRoomId: nextRoomLastReadTsByRoomId,
+        threadLastViewedTsByRoomId: nextThreadLastViewedTsByRoomId,
+        historyLoadingByRoomId: nextHistoryLoadingByRoomId,
+        historyHasMoreByRoomId: nextHistoryHasMoreByRoomId,
+        categoriesBySpaceId: {
+          ...current.categoriesBySpaceId,
+          [spaceId]: layoutToCategories(nextLayout)
+        },
+        spaceLayoutsBySpaceId: {
+          ...current.spaceLayoutsBySpaceId,
+          [spaceId]: nextLayout
+        },
+        spaceStateHostRoomIdBySpaceId: {
+          ...current.spaceStateHostRoomIdBySpaceId,
+          [spaceId]: nextStateHostRoomId ?? ""
+        }
+      };
+    });
+
+    if (client) {
+      await client.leave(roomId).catch(() => undefined);
+      await client.forget(roomId).catch(() => undefined);
+    }
+
+    get().pushNotification("Channel deleted", `${room.name} was removed.`);
   },
   createSpace: async (name) => {
     const trimmed = name.trim();
@@ -1977,55 +2298,92 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   renameSpace: async (spaceId, name) => {
     const trimmed = name.trim();
-    if (!trimmed || spaceId === DEFAULT_SPACE.id) return;
+    if (!trimmed) return;
 
-    const client = get().matrixClient;
+    const state = get();
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) {
+      get().pushNotification("Unable to rename server", "No server context host room found.");
+      return;
+    }
+
+    const nextSpace = { id: spaceId, name: trimmed, icon: trimmed.slice(0, 1).toUpperCase() || "S" };
+    const client = state.matrixClient;
     if (!client) {
       set((state) => ({
         spaces: state.spaces.map((space) =>
-          space.id === spaceId ? { ...space, name: trimmed, icon: trimmed.slice(0, 1).toUpperCase() || "S" } : space
-        )
+          space.id === spaceId ? { ...space, ...nextSpace } : space
+        ),
+        spaceStateHostRoomIdBySpaceId: {
+          ...state.spaceStateHostRoomIdBySpaceId,
+          [spaceId]: spaceStateHostRoomId
+        }
       }));
       return;
     }
 
     try {
-      await client.setRoomName(spaceId, trimmed);
+      const renameAsRoomName = spaceId !== DEFAULT_SPACE.id && spaceStateHostRoomId === spaceId;
+      if (renameAsRoomName) {
+        await client.setRoomName(spaceId, trimmed);
+      } else {
+        await client.sendStateEvent(spaceStateHostRoomId, SERVER_META_EVENT as any, { name: trimmed }, "");
+      }
       set((state) => ({
         spaces: state.spaces.map((space) =>
-          space.id === spaceId ? { ...space, name: trimmed, icon: trimmed.slice(0, 1).toUpperCase() || "S" } : space
-        )
+          space.id === spaceId ? { ...space, ...nextSpace } : space
+        ),
+        spaceStateHostRoomIdBySpaceId: {
+          ...state.spaceStateHostRoomIdBySpaceId,
+          [spaceId]: spaceStateHostRoomId
+        }
       }));
     } catch (error) {
       get().pushNotification("Unable to rename server", (error as Error).message);
     }
   },
   saveServerSettings: async (spaceId, settings) => {
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
+    if (!spaceId) return;
     const normalized = normalizeServerSettings(settings);
-    const client = get().matrixClient;
+    const state = get();
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SERVER_SETTINGS_EVENT as any, normalized, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SERVER_SETTINGS_EVENT as any, normalized, "");
       } catch (error) {
         get().pushNotification("Failed to save server settings", (error as Error).message);
         return;
       }
     }
 
-    set((state) => ({
-      serverSettingsBySpaceId: {
-        ...state.serverSettingsBySpaceId,
-        [spaceId]: normalized
-      }
-    }));
+    set((state) => {
+      const shouldApplyRoles = state.currentSpaceId === spaceId;
+      const nextUsers = shouldApplyRoles ? withAppliedServerRoles(state.users, normalized) : state.users;
+      const me = nextUsers.find((user) => user.id === state.me.id) ?? state.me;
+      return {
+        users: nextUsers,
+        me,
+        serverSettingsBySpaceId: {
+          ...state.serverSettingsBySpaceId,
+          [spaceId]: normalized
+        },
+        spaceStateHostRoomIdBySpaceId: {
+          ...state.spaceStateHostRoomIdBySpaceId,
+          [spaceId]: spaceStateHostRoomId
+        }
+      };
+    });
   },
   setCategoryPermissionRule: async (categoryId, action, rule) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const base = normalizePermissionOverrides(state.permissionOverridesBySpaceId[spaceId] ?? null);
     const nextOverrides: SpacePermissionOverrides = {
       ...base,
@@ -2046,7 +2404,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, PERMISSION_OVERRIDES_EVENT as any, nextOverrides, "");
+        await client.sendStateEvent(spaceStateHostRoomId, PERMISSION_OVERRIDES_EVENT as any, nextOverrides, "");
       } catch (error) {
         get().pushNotification("Failed to update category permissions", (error as Error).message);
         return;
@@ -2063,7 +2421,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextAudit = [nextAuditEntry, ...(state.moderationAuditBySpaceId[spaceId] ?? [])].slice(0, 250);
     if (client) {
       await client
-        .sendStateEvent(spaceId, AUDIT_LOG_EVENT as any, { version: 1, events: nextAudit }, "")
+        .sendStateEvent(spaceStateHostRoomId, AUDIT_LOG_EVENT as any, { version: 1, events: nextAudit }, "")
         .catch(() => undefined);
     }
 
@@ -2079,10 +2437,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   setRoomPermissionRule: async (roomId, action, rule) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const base = normalizePermissionOverrides(state.permissionOverridesBySpaceId[spaceId] ?? null);
     const nextOverrides: SpacePermissionOverrides = {
       ...base,
@@ -2103,7 +2463,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, PERMISSION_OVERRIDES_EVENT as any, nextOverrides, "");
+        await client.sendStateEvent(spaceStateHostRoomId, PERMISSION_OVERRIDES_EVENT as any, nextOverrides, "");
       } catch (error) {
         get().pushNotification("Failed to update room permissions", (error as Error).message);
         return;
@@ -2120,7 +2480,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const nextAudit = [nextAuditEntry, ...(state.moderationAuditBySpaceId[spaceId] ?? [])].slice(0, 250);
     if (client) {
       await client
-        .sendStateEvent(spaceId, AUDIT_LOG_EVENT as any, { version: 1, events: nextAudit }, "")
+        .sendStateEvent(spaceStateHostRoomId, AUDIT_LOG_EVENT as any, { version: 1, events: nextAudit }, "")
         .catch(() => undefined);
     }
 
@@ -2136,11 +2496,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   createCategory: async (name) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const trimmed = normalizeCategoryName(name);
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const trimmed = normalizeCategoryName(name);
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     const nextLayout: SpaceLayout = {
@@ -2163,7 +2525,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to create category", (error as Error).message);
         return;
@@ -2183,11 +2545,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   renameCategory: async (categoryId, name) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const trimmed = normalizeCategoryName(name);
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const trimmed = normalizeCategoryName(name);
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     if (!baseLayout.categories.some((category) => category.id === categoryId)) return;
@@ -2204,7 +2568,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to rename category", (error as Error).message);
         return;
@@ -2225,10 +2589,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deleteCategory: async (categoryId) => {
     if (categoryId === DEFAULT_CATEGORY_ID) return;
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     if (!baseLayout.categories.some((category) => category.id === categoryId)) return;
@@ -2247,7 +2613,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to delete category", (error as Error).message);
         return;
@@ -2268,10 +2634,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   moveCategoryByStep: async (categoryId, direction) => {
     if (categoryId === DEFAULT_CATEGORY_ID) return;
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     const categories = normalizeLayoutCategories(baseLayout.categories);
@@ -2293,7 +2661,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to move category", (error as Error).message);
         return;
@@ -2315,10 +2683,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   reorderCategory: async (sourceCategoryId, targetCategoryId) => {
     if (sourceCategoryId === targetCategoryId) return;
     if (sourceCategoryId === DEFAULT_CATEGORY_ID || targetCategoryId === DEFAULT_CATEGORY_ID) return;
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     const categories = normalizeLayoutCategories(baseLayout.categories);
@@ -2338,7 +2708,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to reorder categories", (error as Error).message);
         return;
@@ -2358,10 +2728,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   moveRoomByStep: async (roomId, direction) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     const placement = baseLayout.rooms[roomId];
@@ -2383,7 +2755,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to move channel", (error as Error).message);
         return;
@@ -2403,10 +2775,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
   moveRoomToCategory: async (roomId, categoryId) => {
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     if (!baseLayout.rooms[roomId]) return;
@@ -2430,7 +2804,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to move channel to category", (error as Error).message);
         return;
@@ -2451,10 +2825,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   reorderRoom: async (sourceRoomId, targetRoomId, targetCategoryId) => {
     if (sourceRoomId === targetRoomId) return;
-    const spaceId = get().currentSpaceId;
-    if (!spaceId || spaceId === DEFAULT_SPACE.id) return;
-    const client = get().matrixClient;
     const state = get();
+    const spaceId = state.currentSpaceId;
+    if (!spaceId) return;
+    const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
+    if (!spaceStateHostRoomId) return;
+    const client = state.matrixClient;
     const spaceRooms = getSpaceRooms(state.rooms, spaceId);
     const baseLayout = hydrateLayoutForRooms(state.spaceLayoutsBySpaceId[spaceId] ?? null, spaceRooms);
     const sourcePlacement = baseLayout.rooms[sourceRoomId];
@@ -2487,7 +2863,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (client) {
       try {
-        await client.sendStateEvent(spaceId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
       } catch (error) {
         get().pushNotification("Failed to reorder channels", (error as Error).message);
         return;

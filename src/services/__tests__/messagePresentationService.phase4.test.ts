@@ -49,6 +49,15 @@ describe("Phase 4 message presentation service", () => {
     expect(
       buildSearchResultIds(messages, {
         query: "",
+        filter: "all",
+        meId: "@me:example.com",
+        meName: "me"
+      })
+    ).toEqual([]);
+
+    expect(
+      buildSearchResultIds(messages, {
+        query: "",
         filter: "mentions",
         meId: "@me:example.com",
         meName: "me"

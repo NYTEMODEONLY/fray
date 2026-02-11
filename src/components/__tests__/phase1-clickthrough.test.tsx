@@ -104,6 +104,11 @@ describe("Phase 1 click-through controls", () => {
     const onToggleOnline = vi.fn();
     const onOpenUserSettings = vi.fn();
     const onOpenSpaceSettings = vi.fn();
+    const onMoveCategoryByStep = vi.fn().mockResolvedValue(undefined);
+    const onReorderCategory = vi.fn().mockResolvedValue(undefined);
+    const onMoveRoomByStep = vi.fn().mockResolvedValue(undefined);
+    const onMoveRoomToCategory = vi.fn().mockResolvedValue(undefined);
+    const onReorderRoom = vi.fn().mockResolvedValue(undefined);
 
     render(
       <ChannelList
@@ -121,6 +126,12 @@ describe("Phase 1 click-through controls", () => {
         onOpenSpaceSettings={onOpenSpaceSettings}
         spaceSettingsEnabled={true}
         onOpenUserSettings={onOpenUserSettings}
+        onMoveCategoryByStep={onMoveCategoryByStep}
+        onReorderCategory={onReorderCategory}
+        onMoveRoomByStep={onMoveRoomByStep}
+        onMoveRoomToCategory={onMoveRoomToCategory}
+        onReorderRoom={onReorderRoom}
+        onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
       />
     );
 

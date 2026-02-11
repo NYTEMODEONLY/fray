@@ -49,6 +49,9 @@ export const buildSearchResultIds = (
   options: BuildSearchResultIdsOptions
 ) => {
   const { query, filter, meId, meName } = options;
+  if (!query.trim() && filter === "all") {
+    return [];
+  }
   return messages
     .filter((message) => containsSearchText(message, query))
     .filter((message) => matchesFilter(message, filter, meId, meName))

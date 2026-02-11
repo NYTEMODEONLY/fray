@@ -7,6 +7,7 @@ import {
   PermissionRule,
   PermissionRuleSet,
   Room,
+  ServerRoleDefinition,
   ServerSettings,
   Space,
   SpacePermissionOverrides,
@@ -58,7 +59,9 @@ const defaultSettings: ServerSettings = {
   roles: {
     adminLevel: 100,
     moderatorLevel: 50,
-    defaultLevel: 0
+    defaultLevel: 0,
+    definitions: [],
+    memberRoleIds: {}
   },
   invites: {
     linkExpiryHours: 24,
@@ -82,6 +85,50 @@ const parseInteger = (value: string, fallback: number, min: number, max: number)
   if (Number.isNaN(parsed)) return fallback;
   return clamp(parsed, min, max);
 };
+
+const createRoleId = (name: string) =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || `role-${Math.random().toString(36).slice(2, 8)}`;
+
+const rolePermissionDefinitions: Array<{
+  action: PermissionAction;
+  label: string;
+  description: string;
+}> = [
+  {
+    action: "manageChannels",
+    label: "Manage Channels",
+    description: "Create, reorder, move, and delete channels and categories."
+  },
+  {
+    action: "invite",
+    label: "Create Invites",
+    description: "Generate and share server invite links."
+  },
+  {
+    action: "send",
+    label: "Send Messages",
+    description: "Post messages in text channels."
+  },
+  {
+    action: "react",
+    label: "Add Reactions",
+    description: "React to messages with emojis."
+  },
+  {
+    action: "pin",
+    label: "Pin Messages",
+    description: "Pin and unpin important messages."
+  },
+  {
+    action: "redact",
+    label: "Delete Messages",
+    description: "Redact messages when moderation is required."
+  }
+];
 
 export const ServerSettingsModal = ({
   space,
@@ -132,6 +179,18 @@ export const ServerSettingsModal = ({
   const [auditLogRetentionDays, setAuditLogRetentionDays] = useState(
     String(activeSettings.moderation.auditLogRetentionDays)
   );
+  const [customRoles, setCustomRoles] = useState<ServerRoleDefinition[]>(
+    activeSettings.roles.definitions ?? []
+  );
+  const [memberRoleIds, setMemberRoleIds] = useState<Record<string, string[]>>(
+    activeSettings.roles.memberRoleIds ?? {}
+  );
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleColor, setNewRoleColor] = useState("#7d8cff");
+  const [newRolePowerLevel, setNewRolePowerLevel] = useState(
+    String(activeSettings.roles.moderatorLevel)
+  );
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [selectedPermissionCategory, setSelectedPermissionCategory] = useState(
     categories[0]?.id ?? "channels"
@@ -154,6 +213,12 @@ export const ServerSettingsModal = ({
     setSafetyLevel(next.moderation.safetyLevel);
     setBlockUnknownMedia(next.moderation.blockUnknownMedia);
     setAuditLogRetentionDays(String(next.moderation.auditLogRetentionDays));
+    setCustomRoles(next.roles.definitions ?? []);
+    setMemberRoleIds(next.roles.memberRoleIds ?? {});
+    setNewRoleName("");
+    setNewRoleColor("#7d8cff");
+    setNewRolePowerLevel(String(next.roles.moderatorLevel));
+    setSelectedRoleId(next.roles.definitions?.[0]?.id ?? "");
     setCopiedInvite(false);
   }, [settings, space.id, space.name]);
 
@@ -169,6 +234,17 @@ export const ServerSettingsModal = ({
     if (roomOptions.some((room) => room.id === selectedPermissionRoom)) return;
     setSelectedPermissionRoom(roomOptions[0].id);
   }, [rooms, selectedPermissionRoom]);
+
+  useEffect(() => {
+    if (!customRoles.length) {
+      if (selectedRoleId) {
+        setSelectedRoleId("");
+      }
+      return;
+    }
+    if (customRoles.some((role) => role.id === selectedRoleId)) return;
+    setSelectedRoleId(customRoles[0]?.id ?? "");
+  }, [customRoles, selectedRoleId]);
 
   const channelCategories = useMemo(() => {
     const categoryMap = new Map(
@@ -204,7 +280,6 @@ export const ServerSettingsModal = ({
       .sort((left, right) => left.order - right.order);
   }, [categories, rooms]);
 
-  const roleSet = useMemo(() => Array.from(new Set(users.flatMap((user) => user.roles))), [users]);
   const inviteLink = `https://matrix.to/#/${encodeURIComponent(space.id)}`;
   const permissionRooms = useMemo(() => rooms.filter((room) => room.type !== "dm"), [rooms]);
   const selectedCategoryRules =
@@ -225,7 +300,9 @@ export const ServerSettingsModal = ({
     roles: {
       adminLevel: parseInteger(adminLevel, activeSettings.roles.adminLevel, 0, 100),
       moderatorLevel: parseInteger(moderatorLevel, activeSettings.roles.moderatorLevel, 0, 100),
-      defaultLevel: parseInteger(defaultLevel, activeSettings.roles.defaultLevel, 0, 100)
+      defaultLevel: parseInteger(defaultLevel, activeSettings.roles.defaultLevel, 0, 100),
+      definitions: customRoles,
+      memberRoleIds
     },
     invites: {
       linkExpiryHours: parseInteger(linkExpiryHours, activeSettings.invites.linkExpiryHours, 1, 168),
@@ -243,6 +320,112 @@ export const ServerSettingsModal = ({
       )
     }
   };
+
+  const roleMemberCountById = useMemo(
+    () =>
+      customRoles.reduce<Record<string, number>>((accumulator, role) => {
+        accumulator[role.id] = Object.values(memberRoleIds).filter((roleIds) => roleIds.includes(role.id)).length;
+        return accumulator;
+      }, {}),
+    [customRoles, memberRoleIds]
+  );
+
+  const createRole = () => {
+    const trimmed = newRoleName.trim();
+    if (!trimmed) return;
+    const baseRoleId = createRoleId(trimmed);
+    let roleId = baseRoleId;
+    let suffix = 2;
+    while (customRoles.some((role) => role.id === roleId)) {
+      roleId = `${baseRoleId}-${suffix}`;
+      suffix += 1;
+    }
+    const powerLevel = parseInteger(
+      newRolePowerLevel,
+      activeSettings.roles.defaultLevel,
+      0,
+      100
+    );
+    setCustomRoles((current) => [
+      ...current,
+      {
+        id: roleId,
+        name: trimmed,
+        color: /^#[0-9a-fA-F]{6}$/.test(newRoleColor) ? newRoleColor : "#8b93a7",
+        powerLevel,
+        permissions: {}
+      }
+    ]);
+    setSelectedRoleId(roleId);
+    setNewRoleName("");
+  };
+
+  const renameRole = (roleId: string) => {
+    const existing = customRoles.find((role) => role.id === roleId);
+    if (!existing) return;
+    const nextName = window.prompt("Rename role", existing.name);
+    if (!nextName?.trim()) return;
+    setCustomRoles((current) =>
+      current.map((role) => (role.id === roleId ? { ...role, name: nextName.trim() } : role))
+    );
+  };
+
+  const deleteRole = (roleId: string) => {
+    const remainingRoles = customRoles.filter((role) => role.id !== roleId);
+    setCustomRoles(remainingRoles);
+    if (selectedRoleId === roleId) {
+      setSelectedRoleId(remainingRoles[0]?.id ?? "");
+    }
+    setMemberRoleIds((current) => {
+      const next = Object.entries(current).reduce<Record<string, string[]>>((accumulator, [userId, roleIds]) => {
+        const remaining = roleIds.filter((id) => id !== roleId);
+        if (remaining.length) {
+          accumulator[userId] = remaining;
+        }
+        return accumulator;
+      }, {});
+      return next;
+    });
+  };
+
+  const toggleRoleAssignment = (userId: string, roleId: string) => {
+    setMemberRoleIds((current) => {
+      const existing = current[userId] ?? [];
+      const hasRole = existing.includes(roleId);
+      const nextRoleIds = hasRole ? existing.filter((id) => id !== roleId) : [...existing, roleId];
+      const next = { ...current };
+      if (nextRoleIds.length) {
+        next[userId] = nextRoleIds;
+      } else {
+        delete next[userId];
+      }
+      return next;
+    });
+  };
+
+  const setRolePermissionEnabled = (
+    roleId: string,
+    action: PermissionAction,
+    enabled: boolean
+  ) => {
+    setCustomRoles((current) =>
+      current.map((role) => {
+        if (role.id !== roleId) return role;
+        const nextPermissions = { ...(role.permissions ?? {}) };
+        if (enabled) {
+          nextPermissions[action] = true;
+        } else {
+          delete nextPermissions[action];
+        }
+        return {
+          ...role,
+          permissions: nextPermissions
+        };
+      })
+    );
+  };
+
+  const selectedRole = customRoles.find((role) => role.id === selectedRoleId) ?? null;
 
   return (
     <div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Server settings">
@@ -313,7 +496,7 @@ export const ServerSettingsModal = ({
           {activeTab === "roles" && (
             <section className="settings-panel">
               <h3>Roles</h3>
-              <p>Map familiar role tiers to Matrix power levels for this server.</p>
+              <p>Manage role tiers, custom roles, and assignment defaults for this server.</p>
               <div className="settings-grid">
                 <label className="settings-field">
                   Admin Power Level
@@ -346,15 +529,201 @@ export const ServerSettingsModal = ({
                   />
                 </label>
               </div>
-              <div className="settings-chip-list">
-                {roleSet.map((role) => (
-                  <span key={role} className="role">
-                    {role}
-                  </span>
-                ))}
+
+              <div className="settings-create-row">
+                <input
+                  placeholder="new-role"
+                  value={newRoleName}
+                  onChange={(event) => setNewRoleName(event.target.value)}
+                  disabled={!canManageChannels}
+                />
+                <input
+                  type="color"
+                  value={newRoleColor}
+                  onChange={(event) => setNewRoleColor(event.target.value)}
+                  aria-label="Role color"
+                  disabled={!canManageChannels}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={newRolePowerLevel}
+                  onChange={(event) => setNewRolePowerLevel(event.target.value)}
+                  aria-label="Role power level"
+                  disabled={!canManageChannels}
+                />
+                <button className="primary" onClick={createRole} disabled={!canManageChannels}>
+                  Create Role
+                </button>
               </div>
+
+              <div className="settings-roles-layout">
+                <section className="settings-role-list-panel">
+                  <h4>Role List</h4>
+                  <div className="settings-role-list">
+                    {customRoles.length === 0 ? (
+                      <p>No custom roles yet. Create one to assign server-specific capabilities.</p>
+                    ) : (
+                      customRoles.map((role) => (
+                        <button
+                          key={role.id}
+                          className={selectedRoleId === role.id ? "settings-role-list-item active" : "settings-role-list-item"}
+                          onClick={() => setSelectedRoleId(role.id)}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="settings-role-color-dot"
+                            style={{ background: role.color }}
+                          />
+                          <span className="settings-role-list-name">{role.name}</span>
+                          <small>{roleMemberCountById[role.id] ?? 0}</small>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </section>
+
+                <section className="settings-role-detail-panel">
+                  {!selectedRole ? (
+                    <p>Select a role to edit display, permissions, and members.</p>
+                  ) : (
+                    <>
+                      <div className="settings-role-row">
+                        <div className="settings-role-meta">
+                          <p className="settings-role-name-row">
+                            <span
+                              aria-hidden="true"
+                              className="settings-role-color-dot"
+                              style={{ background: selectedRole.color }}
+                            />
+                            {selectedRole.name}
+                          </p>
+                          <small>
+                            PL {selectedRole.powerLevel} · {roleMemberCountById[selectedRole.id] ?? 0} member
+                            {roleMemberCountById[selectedRole.id] === 1 ? "" : "s"}
+                          </small>
+                        </div>
+                        <div className="settings-role-controls">
+                          <label className="settings-role-color-field">
+                            Color
+                            <input
+                              type="color"
+                              aria-label={`${selectedRole.name} color`}
+                              value={selectedRole.color}
+                              disabled={!canManageChannels}
+                              onChange={(event) =>
+                                setCustomRoles((current) =>
+                                  current.map((item) =>
+                                    item.id === selectedRole.id ? { ...item, color: event.target.value } : item
+                                  )
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="settings-role-power-field">
+                            PL
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              aria-label={`${selectedRole.name} power level`}
+                              value={String(selectedRole.powerLevel)}
+                              disabled={!canManageChannels}
+                              onChange={(event) =>
+                                setCustomRoles((current) =>
+                                  current.map((item) =>
+                                    item.id === selectedRole.id
+                                      ? {
+                                          ...item,
+                                          powerLevel: parseInteger(event.target.value, item.powerLevel, 0, 100)
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                            />
+                          </label>
+                          <button disabled={!canManageChannels} onClick={() => renameRole(selectedRole.id)}>
+                            Rename
+                          </button>
+                          <button disabled={!canManageChannels} onClick={() => deleteRole(selectedRole.id)}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      <section className="settings-subsection">
+                        <h4>Permissions</h4>
+                        <p>Toggle server-wide capabilities for this role. Channel rules can still override them.</p>
+                        <div className="settings-role-permission-list">
+                          {rolePermissionDefinitions.map((permissionItem) => {
+                            const enabled = selectedRole.permissions?.[permissionItem.action] === true;
+                            return (
+                              <label key={`${selectedRole.id}-${permissionItem.action}`} className="settings-role-permission-row">
+                                <div>
+                                  <strong>{permissionItem.label}</strong>
+                                  <p>{permissionItem.description}</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={enabled}
+                                  disabled={!canManageChannels}
+                                  aria-label={permissionItem.label}
+                                  onChange={(event) =>
+                                    setRolePermissionEnabled(
+                                      selectedRole.id,
+                                      permissionItem.action,
+                                      event.target.checked
+                                    )
+                                  }
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      <section className="settings-subsection">
+                        <h4>Manage Members</h4>
+                        <p>Assign this role directly from here, or use the Members tab for bulk editing.</p>
+                        <div className="settings-member-list">
+                          {users.map((user) => {
+                            const checked = (memberRoleIds[user.id] ?? []).includes(selectedRole.id);
+                            return (
+                              <label key={`${selectedRole.id}-${user.id}`} className="settings-role-member-row">
+                                <span className="settings-role-member-meta">
+                                  <span className="avatar">
+                                    {user.avatarUrl ? (
+                                      <img src={user.avatarUrl} alt={`${user.name} avatar`} />
+                                    ) : (
+                                      user.avatar
+                                    )}
+                                  </span>
+                                  <span>
+                                    <strong>{user.name}</strong>
+                                    <small>{user.id}</small>
+                                  </span>
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={!canManageChannels}
+                                  aria-label={`Assign ${selectedRole.name} to ${user.name}`}
+                                  onChange={() => toggleRoleAssignment(user.id, selectedRole.id)}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    </>
+                  )}
+                </section>
+              </div>
+
               <button className="primary" onClick={() => onSaveSettings(nextSettings)}>
-                Save Role Defaults
+                Save Roles
               </button>
             </section>
           )}
@@ -371,11 +740,33 @@ export const ServerSettingsModal = ({
                     </span>
                     <div>
                       <p>{user.name}</p>
-                      <small>{user.roles.join(", ")}</small>
+                      <small>{user.roles.join(", ") || "Member"}</small>
+                      {customRoles.length > 0 ? (
+                        <div className="settings-chip-list">
+                          {customRoles.map((role) => {
+                            const checked = (memberRoleIds[user.id] ?? []).includes(role.id);
+                            return (
+                              <label key={`${user.id}-${role.id}`} className="settings-checkbox-row">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleRoleAssignment(user.id, role.id)}
+                                />
+                                {role.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <small>No custom roles created yet.</small>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+              <button className="primary" onClick={() => onSaveSettings(nextSettings)}>
+                Save Member Roles
+              </button>
             </section>
           )}
 

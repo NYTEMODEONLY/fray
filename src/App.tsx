@@ -127,6 +127,7 @@ const App = () => {
     togglePin,
     redactMessage,
     copyMessageLink,
+    deleteRoom,
     createSpace,
     renameSpace,
     saveServerSettings,
@@ -439,9 +440,12 @@ const App = () => {
   };
 
   const resolveSettingsSpaceId = () => {
-    if (currentSpace && currentSpace.id !== "all") return currentSpace.id;
-    if (currentRoom?.spaceId && currentRoom.spaceId !== "all") return currentRoom.spaceId;
-    return spaces.find((space) => space.id !== "all")?.id;
+    if (currentSpace?.id) {
+      if (currentSpace.id !== "all") return currentSpace.id;
+      if (spaceRooms.length > 0 || Boolean(currentRoomId)) return currentSpace.id;
+    }
+    if (currentRoom?.spaceId) return currentRoom.spaceId;
+    return spaces[0]?.id;
   };
 
   const canOpenSpaceSettings = Boolean(resolveSettingsSpaceId());
@@ -530,6 +534,12 @@ const App = () => {
         onOpenSpaceSettings={handleSpaceSettings}
         spaceSettingsEnabled={canOpenSpaceSettings}
         onOpenUserSettings={handleOpenUserSettings}
+        onMoveCategoryByStep={moveCategoryByStep}
+        onReorderCategory={reorderCategory}
+        onMoveRoomByStep={moveRoomByStep}
+        onMoveRoomToCategory={moveRoomToCategory}
+        onReorderRoom={reorderRoom}
+        onDeleteRoom={deleteRoom}
       />
 
       <main className="chat-panel">
@@ -653,7 +663,7 @@ const App = () => {
 
       {showMembers && <MemberList users={users} />}
 
-      {showServerSettings && currentSpace && currentSpace.id !== "all" && (
+      {showServerSettings && currentSpace && (
         <ServerSettingsModal
           space={currentSpace}
           rooms={spaceRooms}
