@@ -102,6 +102,7 @@ const App = () => {
     matrixClient,
     matrixStatus,
     matrixError,
+    matrixSession,
     callState,
     bootstrapMatrix,
     login,
@@ -361,6 +362,9 @@ const App = () => {
       roleSettings: currentServerSettings?.roles ?? defaultRoleSettings
     });
   }, [currentMatrixRoom, currentServerSettings, isLocalMode, me.id]);
+  const canViewInfrastructureHealth =
+    permissionSnapshot.membership === "join" &&
+    (permissionSnapshot.role === "owner" || permissionSnapshot.powerLevel >= 90);
   const canInviteMembers = permissionSnapshot.actions.invite;
   const roomAllMessages = messagesByRoomId[currentRoomId] ?? [];
 
@@ -743,6 +747,8 @@ const App = () => {
           space={currentSpace}
           rooms={spaceRooms}
           categories={currentCategories}
+          matrixBaseUrl={matrixSession?.baseUrl ?? null}
+          canViewInfrastructureHealth={canViewInfrastructureHealth}
           settings={currentServerSettings}
           permissionOverrides={currentPermissionOverrides}
           moderationAudit={currentModerationAudit}

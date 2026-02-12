@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Category,
   ModerationAuditEvent,
@@ -14,11 +14,17 @@ import {
   User
 } from "../types";
 import { ServerSettingsTab } from "../store/appStore";
+import {
+  ServerHealthSnapshot,
+  fetchServerHealthSnapshot
+} from "../services/serverHealthService";
 
 interface ServerSettingsModalProps {
   space: Space;
   rooms: Room[];
   categories: Category[];
+  matrixBaseUrl?: string | null;
+  canViewInfrastructureHealth?: boolean;
   settings?: ServerSettings;
   permissionOverrides?: SpacePermissionOverrides;
   moderationAudit: ModerationAuditEvent[];
@@ -48,7 +54,8 @@ const tabs: Array<{ id: ServerSettingsTab; label: string }> = [
   { id: "members", label: "Members" },
   { id: "channels", label: "Channels" },
   { id: "invites", label: "Invites" },
-  { id: "moderation", label: "Moderation" }
+  { id: "moderation", label: "Moderation" },
+  { id: "health", label: "Health" }
 ];
 
 const defaultSettings: ServerSettings = {
@@ -131,10 +138,136 @@ const rolePermissionDefinitions: Array<{
   }
 ];
 
+const HEALTH_PREFS_KEY = "fray.server.health.prefs";
+
+interface HealthPreferences {
+  host: string;
+  useMatrixHost: boolean;
+  username: string;
+  password: string;
+  synapseContainer: string;
+  postgresContainer: string;
+  postgresUser: string;
+  postgresDatabase: string;
+  autoRefresh: boolean;
+}
+
+const extractMatrixHostname = (matrixBaseUrl?: string | null) => {
+  if (!matrixBaseUrl) return "";
+  try {
+    return new URL(matrixBaseUrl).hostname;
+  } catch {
+    return "";
+  }
+};
+
+const getDefaultHealthPreferences = (matrixBaseUrl?: string | null): HealthPreferences => {
+  const host = extractMatrixHostname(matrixBaseUrl);
+  return {
+    host,
+    useMatrixHost: true,
+    username: "root",
+    password: "",
+    synapseContainer: "fray-synapse",
+    postgresContainer: "fray-postgres",
+    postgresUser: "synapse",
+    postgresDatabase: "synapse",
+    autoRefresh: true
+  };
+};
+
+const loadHealthPreferences = (
+  spaceId: string,
+  matrixBaseUrl?: string | null
+): HealthPreferences => {
+  const defaults = getDefaultHealthPreferences(matrixBaseUrl);
+  if (typeof window === "undefined") return defaults;
+  const raw = window.localStorage.getItem(HEALTH_PREFS_KEY);
+  if (!raw) return defaults;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, Partial<HealthPreferences> | undefined>;
+    const perSpace = parsed[spaceId] ?? {};
+    const storedHost = typeof perSpace.host === "string" ? perSpace.host : defaults.host;
+    const storedUseMatrixHost =
+      typeof perSpace.useMatrixHost === "boolean"
+        ? perSpace.useMatrixHost
+        : defaults.host.length > 0
+          ? storedHost.length === 0 || storedHost === defaults.host
+          : false;
+    return {
+      host: storedHost,
+      useMatrixHost: storedUseMatrixHost,
+      username: typeof perSpace.username === "string" ? perSpace.username : defaults.username,
+      password: typeof perSpace.password === "string" ? perSpace.password : defaults.password,
+      synapseContainer:
+        typeof perSpace.synapseContainer === "string"
+          ? perSpace.synapseContainer
+          : defaults.synapseContainer,
+      postgresContainer:
+        typeof perSpace.postgresContainer === "string"
+          ? perSpace.postgresContainer
+          : defaults.postgresContainer,
+      postgresUser:
+        typeof perSpace.postgresUser === "string" ? perSpace.postgresUser : defaults.postgresUser,
+      postgresDatabase:
+        typeof perSpace.postgresDatabase === "string"
+          ? perSpace.postgresDatabase
+          : defaults.postgresDatabase,
+      autoRefresh:
+        typeof perSpace.autoRefresh === "boolean" ? perSpace.autoRefresh : defaults.autoRefresh
+    };
+  } catch {
+    return defaults;
+  }
+};
+
+const saveHealthPreferences = (spaceId: string, preferences: HealthPreferences) => {
+  if (typeof window === "undefined") return;
+  const raw = window.localStorage.getItem(HEALTH_PREFS_KEY);
+  let state: Record<string, HealthPreferences> = {};
+  if (raw) {
+    try {
+      state = JSON.parse(raw) as Record<string, HealthPreferences>;
+    } catch {
+      state = {};
+    }
+  }
+  state[spaceId] = preferences;
+  window.localStorage.setItem(HEALTH_PREFS_KEY, JSON.stringify(state));
+};
+
+const formatBytes = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size >= 100 ? 0 : size >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+};
+
+const formatPercent = (value: number) =>
+  Number.isFinite(value) ? `${value.toFixed(1)}%` : "n/a";
+
+const formatUptime = (value: number) => {
+  if (!Number.isFinite(value) || value < 0) return "n/a";
+  const totalSeconds = Math.floor(value);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
 export const ServerSettingsModal = ({
   space,
   rooms,
   categories,
+  matrixBaseUrl,
+  canViewInfrastructureHealth = true,
   settings,
   permissionOverrides,
   moderationAudit,
@@ -200,6 +333,36 @@ export const ServerSettingsModal = ({
   const [selectedPermissionRoom, setSelectedPermissionRoom] = useState(
     rooms.find((room) => room.type !== "dm")?.id ?? ""
   );
+  const matrixHost = useMemo(() => extractMatrixHostname(matrixBaseUrl), [matrixBaseUrl]);
+  const [healthHost, setHealthHost] = useState("");
+  const [healthUseMatrixHost, setHealthUseMatrixHost] = useState(true);
+  const [healthUsername, setHealthUsername] = useState("root");
+  const [healthPassword, setHealthPassword] = useState("");
+  const [healthSynapseContainer, setHealthSynapseContainer] = useState("fray-synapse");
+  const [healthPostgresContainer, setHealthPostgresContainer] = useState("fray-postgres");
+  const [healthPostgresUser, setHealthPostgresUser] = useState("synapse");
+  const [healthPostgresDatabase, setHealthPostgresDatabase] = useState("synapse");
+  const [healthAutoRefresh, setHealthAutoRefresh] = useState(true);
+  const [healthSnapshot, setHealthSnapshot] = useState<ServerHealthSnapshot | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const resolvedHealthHost =
+    healthUseMatrixHost && matrixHost.trim() ? matrixHost.trim() : healthHost.trim();
+  const healthRequestInFlightRef = useRef(false);
+  const healthConfigRef = useRef({
+    host: "",
+    username: "root",
+    password: "",
+    synapseContainer: "fray-synapse",
+    postgresContainer: "fray-postgres",
+    postgresUser: "synapse",
+    postgresDatabase: "synapse"
+  });
+  const [healthConfigRevision, setHealthConfigRevision] = useState(0);
+  const availableTabs = useMemo(
+    () => tabs.filter((tab) => tab.id !== "health" || canViewInfrastructureHealth),
+    [canViewInfrastructureHealth]
+  );
 
   useEffect(() => {
     const next = settings ?? defaultSettings;
@@ -247,6 +410,133 @@ export const ServerSettingsModal = ({
     if (customRoles.some((role) => role.id === selectedRoleId)) return;
     setSelectedRoleId(customRoles[0]?.id ?? "");
   }, [customRoles, selectedRoleId]);
+
+  useEffect(() => {
+    if (activeTab === "health" && !canViewInfrastructureHealth) {
+      onTabChange("overview");
+    }
+  }, [activeTab, canViewInfrastructureHealth, onTabChange]);
+
+  useEffect(() => {
+    const preferences = loadHealthPreferences(space.id, matrixBaseUrl);
+    const useMatrixHost = preferences.useMatrixHost && Boolean(matrixHost);
+    setHealthHost(preferences.host);
+    setHealthUseMatrixHost(useMatrixHost);
+    setHealthUsername(preferences.username);
+    setHealthPassword(preferences.password);
+    setHealthSynapseContainer(preferences.synapseContainer);
+    setHealthPostgresContainer(preferences.postgresContainer);
+    setHealthPostgresUser(preferences.postgresUser);
+    setHealthPostgresDatabase(preferences.postgresDatabase);
+    setHealthAutoRefresh(preferences.autoRefresh);
+    setHealthSnapshot(null);
+    setHealthError(null);
+    healthRequestInFlightRef.current = false;
+    setHealthLoading(false);
+    setHealthConfigRevision((revision) => revision + 1);
+  }, [matrixBaseUrl, matrixHost, space.id]);
+
+  useEffect(() => {
+    saveHealthPreferences(space.id, {
+      host: healthHost,
+      useMatrixHost: healthUseMatrixHost,
+      username: healthUsername,
+      password: healthPassword,
+      synapseContainer: healthSynapseContainer,
+      postgresContainer: healthPostgresContainer,
+      postgresUser: healthPostgresUser,
+      postgresDatabase: healthPostgresDatabase,
+      autoRefresh: healthAutoRefresh
+    });
+  }, [
+    healthAutoRefresh,
+    healthHost,
+    healthUseMatrixHost,
+    healthPassword,
+    healthPostgresContainer,
+    healthPostgresDatabase,
+    healthPostgresUser,
+    healthSynapseContainer,
+    healthUsername,
+    space.id
+  ]);
+
+  useEffect(() => {
+    healthConfigRef.current = {
+      host: resolvedHealthHost,
+      username: healthUsername,
+      password: healthPassword,
+      synapseContainer: healthSynapseContainer,
+      postgresContainer: healthPostgresContainer,
+      postgresUser: healthPostgresUser,
+      postgresDatabase: healthPostgresDatabase
+    };
+  }, [
+    healthPassword,
+    healthPostgresContainer,
+    healthPostgresDatabase,
+    healthPostgresUser,
+    healthUseMatrixHost,
+    healthSynapseContainer,
+    healthUsername,
+    matrixHost,
+    resolvedHealthHost
+  ]);
+
+  const refreshServerHealth = useCallback(async () => {
+    const config = healthConfigRef.current;
+    if (!config.host.trim() || !config.username.trim()) {
+      setHealthError("Host and SSH username are required to load server health.");
+      return;
+    }
+    if (healthRequestInFlightRef.current) return;
+    healthRequestInFlightRef.current = true;
+    setHealthLoading(true);
+    setHealthError(null);
+    try {
+      const snapshot = await fetchServerHealthSnapshot({
+        host: config.host.trim(),
+        username: config.username.trim(),
+        password: config.password,
+        synapseContainer: config.synapseContainer.trim(),
+        postgresContainer: config.postgresContainer.trim(),
+        postgresUser: config.postgresUser.trim(),
+        postgresDatabase: config.postgresDatabase.trim()
+      });
+      setHealthSnapshot(snapshot);
+    } catch (error) {
+      setHealthError((error as Error).message);
+    } finally {
+      healthRequestInFlightRef.current = false;
+      setHealthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "health") return;
+    if (!canViewInfrastructureHealth) return;
+    const config = healthConfigRef.current;
+    if (!config.host.trim() || !config.username.trim()) return;
+    void refreshServerHealth();
+  }, [activeTab, canViewInfrastructureHealth, healthConfigRevision, refreshServerHealth]);
+
+  useEffect(() => {
+    if (activeTab !== "health") return;
+    if (!canViewInfrastructureHealth) return;
+    if (!healthAutoRefresh) return;
+    if (!resolvedHealthHost || !healthUsername.trim()) return;
+    const interval = window.setInterval(() => {
+      void refreshServerHealth();
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, [
+    activeTab,
+    canViewInfrastructureHealth,
+    healthAutoRefresh,
+    healthUsername,
+    resolvedHealthHost,
+    refreshServerHealth
+  ]);
 
   const channelCategories = useMemo(() => {
     const categoryMap = new Map(
@@ -428,6 +718,24 @@ export const ServerSettingsModal = ({
   };
 
   const selectedRole = customRoles.find((role) => role.id === selectedRoleId) ?? null;
+  const hostMemoryUsagePercent = healthSnapshot
+    ? (healthSnapshot.host.memory_used_bytes / Math.max(healthSnapshot.host.memory_total_bytes, 1)) * 100
+    : 0;
+  const hostDiskUsagePercent = healthSnapshot
+    ? (healthSnapshot.host.disk_used_bytes / Math.max(healthSnapshot.host.disk_total_bytes, 1)) * 100
+    : 0;
+  const capturedAtLabel = healthSnapshot
+    ? new Date(healthSnapshot.captured_at).toLocaleString()
+    : null;
+  const matrixContainerMetrics =
+    healthSnapshot?.containers.find(
+      (container) => container.name === healthSnapshot.matrix.container
+    ) ?? null;
+  const databaseContainerMetrics =
+    healthSnapshot?.containers.find(
+      (container) => container.name === healthSnapshot.database.container
+    ) ?? null;
+  const isHealthHostAuto = healthUseMatrixHost && Boolean(matrixHost);
 
   return (
     <div className="settings-backdrop" role="dialog" aria-modal="true" aria-label="Server settings">
@@ -438,7 +746,7 @@ export const ServerSettingsModal = ({
             <h2>{space.name}</h2>
           </div>
           <div className="settings-tab-list">
-            {tabs.map((tab) => (
+            {availableTabs.map((tab) => (
               <button
                 key={tab.id}
                 className={activeTab === tab.id ? "settings-tab active" : "settings-tab"}
@@ -1089,6 +1397,270 @@ export const ServerSettingsModal = ({
                   </div>
                 )}
               </section>
+            </section>
+          )}
+
+          {activeTab === "health" && (
+            <section className="settings-panel">
+              <h3>Infrastructure Health</h3>
+              <p>
+                Monitor live host, Matrix, and PostgreSQL metrics over SSH. Credentials are
+                saved locally on this device for this server.
+              </p>
+
+              <div className="settings-grid">
+                <label className="settings-field">
+                  VPS Host
+                  <input
+                    placeholder="matrix.example.com"
+                    value={resolvedHealthHost}
+                    onChange={(event) => setHealthHost(event.target.value)}
+                    disabled={isHealthHostAuto}
+                  />
+                </label>
+                <label className="settings-field">
+                  SSH User
+                  <input
+                    placeholder="root"
+                    value={healthUsername}
+                    onChange={(event) => setHealthUsername(event.target.value)}
+                  />
+                </label>
+                <label className="settings-field">
+                  SSH Password (Optional)
+                  <input
+                    type="password"
+                    placeholder="Use empty when SSH keys are configured"
+                    value={healthPassword}
+                    onChange={(event) => setHealthPassword(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              {matrixHost && (
+                <label className="settings-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={!healthUseMatrixHost}
+                    onChange={(event) => {
+                      const useOverride = event.target.checked;
+                      setHealthUseMatrixHost(!useOverride);
+                      if (useOverride && !healthHost.trim()) {
+                        setHealthHost(matrixHost);
+                      }
+                    }}
+                  />
+                  Override auto-detected host ({matrixHost})
+                </label>
+              )}
+
+              <div className="settings-grid">
+                <label className="settings-field">
+                  Synapse Container
+                  <input
+                    value={healthSynapseContainer}
+                    onChange={(event) => setHealthSynapseContainer(event.target.value)}
+                  />
+                </label>
+                <label className="settings-field">
+                  Postgres Container
+                  <input
+                    value={healthPostgresContainer}
+                    onChange={(event) => setHealthPostgresContainer(event.target.value)}
+                  />
+                </label>
+                <label className="settings-field">
+                  Postgres User / DB
+                  <div className="settings-inline-row">
+                    <input
+                      value={healthPostgresUser}
+                      onChange={(event) => setHealthPostgresUser(event.target.value)}
+                    />
+                    <input
+                      value={healthPostgresDatabase}
+                      onChange={(event) => setHealthPostgresDatabase(event.target.value)}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className="settings-row">
+                <button className="primary" onClick={() => void refreshServerHealth()} disabled={healthLoading}>
+                  {healthLoading ? "Refreshing..." : "Refresh Health"}
+                </button>
+                <label className="settings-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={healthAutoRefresh}
+                    onChange={(event) => setHealthAutoRefresh(event.target.checked)}
+                  />
+                  Auto-refresh every 10 seconds
+                </label>
+                {capturedAtLabel && <span className="settings-helper">Last update: {capturedAtLabel}</span>}
+              </div>
+
+              {healthError && <p className="settings-error">{healthError}</p>}
+
+              {healthSnapshot && (
+                <>
+                  <div className="health-grid">
+                    <article className="health-card">
+                      <h4>Host</h4>
+                      <div className="health-metric-row">
+                        <span>CPU</span>
+                        <strong>{formatPercent(healthSnapshot.host.cpu_percent)}</strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Load (1m / 5m / 15m)</span>
+                        <strong>
+                          {healthSnapshot.host.load_1m.toFixed(2)} / {healthSnapshot.host.load_5m.toFixed(2)} /{" "}
+                          {healthSnapshot.host.load_15m.toFixed(2)}
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>RAM</span>
+                        <strong>
+                          {formatBytes(healthSnapshot.host.memory_used_bytes)} /{" "}
+                          {formatBytes(healthSnapshot.host.memory_total_bytes)} ({formatPercent(hostMemoryUsagePercent)})
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Disk</span>
+                        <strong>
+                          {formatBytes(healthSnapshot.host.disk_used_bytes)} /{" "}
+                          {formatBytes(healthSnapshot.host.disk_total_bytes)} ({formatPercent(hostDiskUsagePercent)})
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Uptime</span>
+                        <strong>{formatUptime(healthSnapshot.host.uptime_seconds)}</strong>
+                      </div>
+                    </article>
+
+                    <article className="health-card">
+                      <h4>Matrix (Synapse)</h4>
+                      <div className="health-metric-row">
+                        <span>Status</span>
+                        <strong>
+                          {healthSnapshot.matrix.status}
+                          {healthSnapshot.matrix.health !== "none"
+                            ? ` (${healthSnapshot.matrix.health})`
+                            : ""}
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Version</span>
+                        <strong>{healthSnapshot.matrix.version ?? "unknown"}</strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Rooms</span>
+                        <strong>{healthSnapshot.matrix.room_count ?? "n/a"}</strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Users</span>
+                        <strong>{healthSnapshot.matrix.user_count ?? "n/a"}</strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Joined memberships</span>
+                        <strong>{healthSnapshot.matrix.joined_memberships ?? "n/a"}</strong>
+                      </div>
+                      {matrixContainerMetrics && (
+                        <div className="health-metric-row">
+                          <span>Container CPU / RAM</span>
+                          <strong>
+                            {matrixContainerMetrics.cpuPercent ?? "n/a"} /{" "}
+                            {matrixContainerMetrics.memoryPercent ?? "n/a"}
+                          </strong>
+                        </div>
+                      )}
+                    </article>
+
+                    <article className="health-card">
+                      <h4>Database (PostgreSQL)</h4>
+                      <div className="health-metric-row">
+                        <span>Status</span>
+                        <strong>
+                          {healthSnapshot.database.status}
+                          {healthSnapshot.database.health !== "none"
+                            ? ` (${healthSnapshot.database.health})`
+                            : ""}
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Database</span>
+                        <strong>{healthSnapshot.database.database}</strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Size</span>
+                        <strong>
+                          {healthSnapshot.database.size_bytes
+                            ? formatBytes(healthSnapshot.database.size_bytes)
+                            : "n/a"}
+                        </strong>
+                      </div>
+                      <div className="health-metric-row">
+                        <span>Active connections</span>
+                        <strong>{healthSnapshot.database.active_connections ?? "n/a"}</strong>
+                      </div>
+                      {databaseContainerMetrics && (
+                        <div className="health-metric-row">
+                          <span>Container CPU / RAM</span>
+                          <strong>
+                            {databaseContainerMetrics.cpuPercent ?? "n/a"} /{" "}
+                            {databaseContainerMetrics.memoryPercent ?? "n/a"}
+                          </strong>
+                        </div>
+                      )}
+                    </article>
+                  </div>
+
+                  <section className="settings-subsection">
+                    <h4>Container Stats</h4>
+                    <div className="health-table-wrap">
+                      <table className="health-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>CPU</th>
+                            <th>RAM</th>
+                            <th>RAM Usage</th>
+                            <th>Net I/O</th>
+                            <th>Block I/O</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {healthSnapshot.containers.map((container) => (
+                            <tr key={container.name}>
+                              <td>{container.name}</td>
+                              <td>
+                                {container.status}
+                                {container.health !== "none" ? ` (${container.health})` : ""}
+                              </td>
+                              <td>{container.cpuPercent ?? "n/a"}</td>
+                              <td>{container.memoryPercent ?? "n/a"}</td>
+                              <td>{container.memoryUsage ?? "n/a"}</td>
+                              <td>{container.networkIo ?? "n/a"}</td>
+                              <td>{container.blockIo ?? "n/a"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  {healthSnapshot.errors.length > 0 && (
+                    <section className="settings-subsection">
+                      <h4>Health Warnings</h4>
+                      <div className="health-error-list">
+                        {healthSnapshot.errors.map((error) => (
+                          <p key={error}>{error}</p>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
             </section>
           )}
         </div>

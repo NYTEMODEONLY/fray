@@ -65,7 +65,14 @@ const toMembership = (value: string | undefined) => {
 };
 
 type MatrixStatus = "idle" | "connecting" | "syncing" | "error";
-export type ServerSettingsTab = "overview" | "roles" | "members" | "channels" | "invites" | "moderation";
+export type ServerSettingsTab =
+  | "overview"
+  | "roles"
+  | "members"
+  | "channels"
+  | "invites"
+  | "moderation"
+  | "health";
 
 interface MatrixSession {
   baseUrl: string;

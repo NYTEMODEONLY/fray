@@ -1932,6 +1932,12 @@ textarea {
   flex-wrap: wrap;
 }
 
+.settings-inline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
 .settings-profile-card {
   border: 1px solid var(--border);
   background: var(--panel-2);
@@ -2025,6 +2031,68 @@ textarea {
   gap: 2px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.health-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-card h4 {
+  font-size: 14px;
+}
+
+.health-metric-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.health-metric-row strong {
+  color: var(--text);
+  text-align: right;
+}
+
+.health-table-wrap {
+  overflow: auto;
+}
+
+.health-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.health-table th,
+.health-table td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 6px;
+  font-size: 12px;
+}
+
+.health-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.health-error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .settings-create-row {
