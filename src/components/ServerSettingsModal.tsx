@@ -23,6 +23,7 @@ interface ServerSettingsModalProps {
   permissionOverrides?: SpacePermissionOverrides;
   moderationAudit: ModerationAuditEvent[];
   canManageChannels: boolean;
+  canDeleteChannels: boolean;
   users: User[];
   activeTab: ServerSettingsTab;
   onTabChange: (tab: ServerSettingsTab) => void;
@@ -138,6 +139,7 @@ export const ServerSettingsModal = ({
   permissionOverrides,
   moderationAudit,
   canManageChannels,
+  canDeleteChannels,
   users,
   activeTab,
   onTabChange,
@@ -839,7 +841,18 @@ export const ServerSettingsModal = ({
                           Rename
                         </button>
                         {category.id !== "channels" && (
-                          <button disabled={!canManageChannels} onClick={() => onDeleteCategory(category.id)}>Delete</button>
+                          <button
+                            disabled={!canDeleteChannels}
+                            onClick={async () => {
+                              const confirmed = window.confirm(
+                                `Delete category "${category.name}"? Channels in it will move to Channels.`
+                              );
+                              if (!confirmed) return;
+                              await onDeleteCategory(category.id);
+                            }}
+                          >
+                            Delete
+                          </button>
                         )}
                       </div>
                     </div>

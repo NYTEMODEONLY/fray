@@ -76,6 +76,8 @@ describe("Phase 5 user settings modal", () => {
     expect(onSetMentionsOnlyNotifications).toHaveBeenCalledWith(true);
 
     await user.click(screen.getByRole("button", { name: "Keybinds" }));
+    expect(screen.getByText("Cmd/Ctrl + R")).toBeInTheDocument();
+    expect(screen.getByText("Refresh app and install updates")).toBeInTheDocument();
     await user.click(screen.getByLabelText("Enable keyboard shortcuts"));
     expect(onSetKeybindsEnabled).toHaveBeenCalledWith(false);
 

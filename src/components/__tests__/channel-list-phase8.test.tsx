@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ChannelList } from "../ChannelList";
@@ -54,6 +54,7 @@ describe("Phase 8 channel list interactions", () => {
         categories={categories}
         currentRoomId="r_general"
         canManageChannels={true}
+        canDeleteChannels={true}
         onSelect={vi.fn()}
         spaceName="Fray HQ"
         isOnline={true}
@@ -68,6 +69,7 @@ describe("Phase 8 channel list interactions", () => {
         onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
         onMoveRoomToCategory={onMoveRoomToCategory}
         onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
         onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
       />
     );
@@ -92,7 +94,7 @@ describe("Phase 8 channel list interactions", () => {
     const user = userEvent.setup();
     const onMoveRoomByStep = vi.fn().mockResolvedValue(undefined);
     const onDeleteRoom = vi.fn().mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDeleteCategory = vi.fn().mockResolvedValue(undefined);
 
     render(
       <ChannelList
@@ -101,6 +103,7 @@ describe("Phase 8 channel list interactions", () => {
         categories={categories}
         currentRoomId="r_general"
         canManageChannels={true}
+        canDeleteChannels={true}
         onSelect={vi.fn()}
         spaceName="Fray HQ"
         isOnline={true}
@@ -115,6 +118,7 @@ describe("Phase 8 channel list interactions", () => {
         onMoveRoomByStep={onMoveRoomByStep}
         onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
         onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={onDeleteCategory}
         onDeleteRoom={onDeleteRoom}
       />
     );
@@ -125,8 +129,52 @@ describe("Phase 8 channel list interactions", () => {
 
     fireEvent.contextMenu(screen.getByRole("button", { name: "general" }));
     await user.click(screen.getByRole("button", { name: "Delete channel" }));
+    const roomDeleteDialog = screen.getByRole("dialog", { name: "Delete confirmation" });
+    await user.click(within(roomDeleteDialog).getByRole("button", { name: "Delete channel" }));
     expect(onDeleteRoom).toHaveBeenCalledWith("r_general");
 
-    confirmSpy.mockRestore();
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Community" }));
+    await user.click(screen.getByRole("button", { name: "Delete category" }));
+    const categoryDeleteDialog = screen.getByRole("dialog", { name: "Delete confirmation" });
+    await user.click(within(categoryDeleteDialog).getByRole("button", { name: "Delete category" }));
+    expect(onDeleteCategory).toHaveBeenCalledWith("community");
+  });
+
+  it("requires explicit confirmation before deleting", async () => {
+    const user = userEvent.setup();
+    const onDeleteRoom = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ChannelList
+        me={me}
+        rooms={rooms}
+        categories={categories}
+        currentRoomId="r_general"
+        canManageChannels={true}
+        canDeleteChannels={true}
+        onSelect={vi.fn()}
+        spaceName="Fray HQ"
+        isOnline={true}
+        onToggleOnline={vi.fn()}
+        onCreateRoom={vi.fn()}
+        onInvite={vi.fn()}
+        onOpenSpaceSettings={vi.fn()}
+        spaceSettingsEnabled={true}
+        onOpenUserSettings={vi.fn()}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteRoom={onDeleteRoom}
+      />
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "general" }));
+    await user.click(screen.getByRole("button", { name: "Delete channel" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete confirmation" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(onDeleteRoom).not.toHaveBeenCalled();
   });
 });

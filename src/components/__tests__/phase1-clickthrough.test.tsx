@@ -117,6 +117,7 @@ describe("Phase 1 click-through controls", () => {
         categories={categories}
         currentRoomId="r_general"
         canManageChannels={true}
+        canDeleteChannels={true}
         onSelect={onSelect}
         spaceName="Fray HQ"
         isOnline={true}
@@ -131,6 +132,7 @@ describe("Phase 1 click-through controls", () => {
         onMoveRoomByStep={onMoveRoomByStep}
         onMoveRoomToCategory={onMoveRoomToCategory}
         onReorderRoom={onReorderRoom}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
         onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
       />
     );

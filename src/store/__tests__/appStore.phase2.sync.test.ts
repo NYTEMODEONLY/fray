@@ -59,6 +59,7 @@ const createMatrixHarness = (): MatrixHarness => {
     name,
     tags: {},
     getType: () => "m.room",
+    getMyMembership: () => "join",
     getDefaultRoomName: () => name,
     getUnreadNotificationCount: () => 0,
     getLiveTimeline: () => ({ getEvents: () => [] }),

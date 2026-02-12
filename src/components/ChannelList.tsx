@@ -24,6 +24,7 @@ interface ChannelListProps {
   categories: Category[];
   currentRoomId: string;
   canManageChannels: boolean;
+  canDeleteChannels: boolean;
   onSelect: (roomId: string) => void;
   spaceName: string;
   isOnline: boolean;
@@ -42,6 +43,7 @@ interface ChannelListProps {
     targetRoomId: string,
     targetCategoryId?: string
   ) => Promise<void> | void;
+  onDeleteCategory: (categoryId: string) => Promise<void> | void;
   onDeleteRoom: (roomId: string) => Promise<void> | void;
 }
 
@@ -54,6 +56,11 @@ type DropHint =
   | { kind: "category"; id: string }
   | { kind: "category-body"; id: string }
   | { kind: "room"; id: string }
+  | null;
+
+type PendingDelete =
+  | { kind: "room"; roomId: string; name: string }
+  | { kind: "category"; categoryId: string; name: string }
   | null;
 
 const DEFAULT_CATEGORY_ID = "channels";
@@ -83,6 +90,7 @@ export const ChannelList = ({
   categories,
   currentRoomId,
   canManageChannels,
+  canDeleteChannels,
   onSelect,
   spaceName,
   isOnline,
@@ -97,6 +105,7 @@ export const ChannelList = ({
   onMoveRoomByStep,
   onMoveRoomToCategory,
   onReorderRoom,
+  onDeleteCategory,
   onDeleteRoom
 }: ChannelListProps) => {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -108,6 +117,8 @@ export const ChannelList = ({
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
   const [draggingRoomId, setDraggingRoomId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
+  const [deleteInFlight, setDeleteInFlight] = useState(false);
 
   const grouped = useMemo(() => {
     const categoryMap = new Map(
@@ -155,6 +166,7 @@ export const ChannelList = ({
       if (event.key !== "Escape") return;
       setContextMenu(null);
       setDropHint(null);
+      setPendingDelete(null);
     };
     const handleResize = () => setContextMenu(null);
     window.addEventListener("keydown", handleEscape);
@@ -189,6 +201,36 @@ export const ChannelList = ({
     event.preventDefault();
     const point = clampMenuPoint(event.clientX, event.clientY);
     setContextMenu({ kind: "category", categoryId, x: point.x, y: point.y });
+  };
+
+  const openRoomDeletePrompt = (roomId: string) => {
+    const room = roomById.get(roomId);
+    if (!room) return;
+    setPendingDelete({ kind: "room", roomId, name: room.name });
+  };
+
+  const openCategoryDeletePrompt = (categoryId: string) => {
+    const category = categoryById.get(categoryId);
+    if (!category || category.id === DEFAULT_CATEGORY_ID) return;
+    setPendingDelete({ kind: "category", categoryId, name: category.name });
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete || deleteInFlight) return;
+    const target = pendingDelete;
+    setDeleteInFlight(true);
+    runSafely(async () => {
+      try {
+        if (target.kind === "room") {
+          await onDeleteRoom(target.roomId);
+        } else {
+          await onDeleteCategory(target.categoryId);
+        }
+      } finally {
+        setDeleteInFlight(false);
+        setPendingDelete(null);
+      }
+    });
   };
 
   const handleCreate = () => {
@@ -494,43 +536,40 @@ export const ChannelList = ({
                 <button onClick={() => runContextAction(() => copyToClipboard(contextMenu.roomId))}>
                   Copy channel ID
                 </button>
-                {canManageChannels && roomById.get(contextMenu.roomId)?.type !== "dm" && (
+                {(canManageChannels || canDeleteChannels) &&
+                  roomById.get(contextMenu.roomId)?.type !== "dm" && (
                   <>
                     <div className="context-menu-separator" />
-                    <button onClick={() => runContextAction(() => onMoveRoomByStep(contextMenu.roomId, "up"))}>
-                      Move channel up
-                    </button>
-                    <button onClick={() => runContextAction(() => onMoveRoomByStep(contextMenu.roomId, "down"))}>
-                      Move channel down
-                    </button>
-                    {grouped
-                      .filter((category) => category.id !== (roomById.get(contextMenu.roomId)?.category ?? DEFAULT_CATEGORY_ID))
-                      .map((category) => (
-                        <button
-                          key={`${contextMenu.roomId}-${category.id}`}
-                          onClick={() =>
-                            runContextAction(() => onMoveRoomToCategory(contextMenu.roomId, category.id))
-                          }
-                        >
-                          Move to {category.name}
+                    {canManageChannels && (
+                      <>
+                        <button onClick={() => runContextAction(() => onMoveRoomByStep(contextMenu.roomId, "up"))}>
+                          Move channel up
                         </button>
-                      ))}
-                    <button
-                      className="danger"
-                      onClick={() =>
-                        runContextAction(async () => {
-                          const targetRoom = roomById.get(contextMenu.roomId);
-                          if (!targetRoom) return;
-                          const confirmed = window.confirm(
-                            `Delete channel "${targetRoom.name}"? This removes it from Fray and leaves the Matrix room for this account.`
-                          );
-                          if (!confirmed) return;
-                          await onDeleteRoom(contextMenu.roomId);
-                        })
-                      }
-                    >
-                      Delete channel
-                    </button>
+                        <button onClick={() => runContextAction(() => onMoveRoomByStep(contextMenu.roomId, "down"))}>
+                          Move channel down
+                        </button>
+                        {grouped
+                          .filter((category) => category.id !== (roomById.get(contextMenu.roomId)?.category ?? DEFAULT_CATEGORY_ID))
+                          .map((category) => (
+                            <button
+                              key={`${contextMenu.roomId}-${category.id}`}
+                              onClick={() =>
+                                runContextAction(() => onMoveRoomToCategory(contextMenu.roomId, category.id))
+                              }
+                            >
+                              Move to {category.name}
+                            </button>
+                          ))}
+                      </>
+                    )}
+                    {canDeleteChannels && (
+                      <button
+                        className="danger"
+                        onClick={() => runContextAction(() => openRoomDeletePrompt(contextMenu.roomId))}
+                      >
+                        Delete channel
+                      </button>
+                    )}
                   </>
                 )}
               </>
@@ -553,26 +592,80 @@ export const ChannelList = ({
                 <button onClick={() => runContextAction(() => copyToClipboard(contextMenu.categoryId))}>
                   Copy category ID
                 </button>
-                {canManageChannels && contextMenu.categoryId !== DEFAULT_CATEGORY_ID && (
+                {(canManageChannels || canDeleteChannels) &&
+                  contextMenu.categoryId !== DEFAULT_CATEGORY_ID && (
                   <>
                     <div className="context-menu-separator" />
-                    <button
-                      onClick={() => runContextAction(() => onMoveCategoryByStep(contextMenu.categoryId, "up"))}
-                    >
-                      Move category up
-                    </button>
-                    <button
-                      onClick={() =>
-                        runContextAction(() => onMoveCategoryByStep(contextMenu.categoryId, "down"))
-                      }
-                    >
-                      Move category down
-                    </button>
+                    {canManageChannels && (
+                      <>
+                        <button
+                          onClick={() => runContextAction(() => onMoveCategoryByStep(contextMenu.categoryId, "up"))}
+                        >
+                          Move category up
+                        </button>
+                        <button
+                          onClick={() =>
+                            runContextAction(() => onMoveCategoryByStep(contextMenu.categoryId, "down"))
+                          }
+                        >
+                          Move category down
+                        </button>
+                      </>
+                    )}
+                    {canDeleteChannels && (
+                      <button
+                        className="danger"
+                        onClick={() =>
+                          runContextAction(() => openCategoryDeletePrompt(contextMenu.categoryId))
+                        }
+                      >
+                        Delete category
+                      </button>
+                    )}
                   </>
                 )}
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div
+          className="settings-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Delete confirmation"
+          onMouseDown={() => {
+            if (!deleteInFlight) {
+              setPendingDelete(null);
+            }
+          }}
+        >
+          <section className="delete-confirm-card" onMouseDown={(event) => event.stopPropagation()}>
+            <h3>{pendingDelete.kind === "room" ? "Delete channel?" : "Delete category?"}</h3>
+            <p>
+              {pendingDelete.kind === "room"
+                ? `Delete channel "${pendingDelete.name}" permanently from Synapse? This cannot be undone.`
+                : `Delete category "${pendingDelete.name}"? Channels in it will move to Channels.`}
+            </p>
+            <div className="delete-confirm-actions">
+              <button
+                className="ghost"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleteInFlight}
+              >
+                Cancel
+              </button>
+              <button className="pill warn" onClick={confirmDelete} disabled={deleteInFlight}>
+                {deleteInFlight
+                  ? "Deleting..."
+                  : pendingDelete.kind === "room"
+                    ? "Delete channel"
+                    : "Delete category"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </aside>

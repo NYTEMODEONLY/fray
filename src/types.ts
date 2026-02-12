@@ -147,9 +147,17 @@ export interface ModerationAuditEvent {
   sourceEventId?: string;
 }
 
+export type NotificationActionId = "install-update";
+
+export interface NotificationAction {
+  id: NotificationActionId;
+  label: string;
+}
+
 export interface NotificationItem {
   id: string;
   title: string;
   body: string;
   timestamp: number;
+  action?: NotificationAction;
 }

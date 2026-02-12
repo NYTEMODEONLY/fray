@@ -21,10 +21,21 @@ import {
   buildThreadSummaries,
   RoomSearchFilter
 } from "./services/messagePresentationService";
+import {
+  checkForDesktopUpdateAvailability,
+  isRefreshShortcut,
+  refreshWithDesktopUpdate
+} from "./services/appUpdateService";
 import { trackLocalMetricEvent } from "./services/localMetricsService";
-import { buildPermissionSnapshot, canRedactMessage, parsePowerLevels } from "./services/permissionService";
+import {
+  buildPermissionSnapshot,
+  canDeleteChannelsAndCategories,
+  canRedactMessage,
+  parsePowerLevels
+} from "./services/permissionService";
 import { useAppStore } from "./store/appStore";
 import { notify } from "./platform/notifications";
+import type { NotificationActionId } from "./types";
 
 const defaultRoleSettings = {
   adminLevel: 100,
@@ -160,7 +171,17 @@ const App = () => {
   const [showUserSettings, setShowUserSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [forceLocalMode, setForceLocalMode] = useState(loadLocalModePreference);
+  const refreshInFlightRef = useRef(false);
+  const updateNoticeCheckedRef = useRef(false);
   const isLocalMode = forceLocalMode && !matrixClient;
+
+  const runRefreshUpdateFlow = () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    void refreshWithDesktopUpdate({ notify: pushNotification }).finally(() => {
+      refreshInFlightRef.current = false;
+    });
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -207,10 +228,29 @@ const App = () => {
   }, [mentionsOnlyNotifications, me.name, notifications, notificationsEnabled]);
 
   useEffect(() => {
+    if (updateNoticeCheckedRef.current) return;
+    updateNoticeCheckedRef.current = true;
+    void checkForDesktopUpdateAvailability().then((availableUpdate) => {
+      if (!availableUpdate) return;
+      pushNotification(
+        "Update available",
+        `Fray ${availableUpdate.version} is available.`,
+        { action: { id: "install-update", label: "Update now" } }
+      );
+    });
+  }, [pushNotification]);
+
+  useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
       if (!keybindsEnabled) return;
       const isCmd = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
+
+      if (isRefreshShortcut(event)) {
+        event.preventDefault();
+        runRefreshUpdateFlow();
+        return;
+      }
 
       if (isCmd && key === "k") {
         event.preventDefault();
@@ -238,7 +278,14 @@ const App = () => {
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [keybindsEnabled, toggleMembers, togglePins]);
+  }, [keybindsEnabled, pushNotification, toggleMembers, togglePins]);
+
+  const handleNotificationAction = (notificationId: string, actionId: NotificationActionId) => {
+    dismissNotification(notificationId);
+    if (actionId === "install-update") {
+      runRefreshUpdateFlow();
+    }
+  };
 
   const currentSpace = spaces.find((space) => space.id === currentSpaceId) ?? spaces[0];
   const spaceRooms = rooms.filter((room) => room.spaceId === currentSpaceId);
@@ -288,6 +335,32 @@ const App = () => {
   }, [currentMatrixRoom, currentPermissionOverrides, currentRoom, currentServerSettings, isLocalMode, me.id]);
 
   const canManageChannels = permissionSnapshot.actions.manageChannels;
+  const canDeleteChannels = useMemo(() => {
+    const powerLevelContent = currentMatrixRoom
+      ?.currentState.getStateEvents(EventType.RoomPowerLevels, "")
+      ?.getContent();
+    const parsed = parsePowerLevels(powerLevelContent);
+    const powerLevels = isLocalMode
+      ? {
+          ...parsed,
+          users: {
+            ...parsed.users,
+            [me.id]: 100
+          },
+          redact: 50
+        }
+      : parsed;
+    const membership = isLocalMode
+      ? "join"
+      : toMembership(currentMatrixRoom?.getMember(me.id)?.membership);
+
+    return canDeleteChannelsAndCategories({
+      userId: me.id,
+      membership,
+      powerLevels,
+      roleSettings: currentServerSettings?.roles ?? defaultRoleSettings
+    });
+  }, [currentMatrixRoom, currentServerSettings, isLocalMode, me.id]);
   const canInviteMembers = permissionSnapshot.actions.invite;
   const roomAllMessages = messagesByRoomId[currentRoomId] ?? [];
 
@@ -525,6 +598,7 @@ const App = () => {
         categories={currentCategories}
         currentRoomId={currentRoomId}
         canManageChannels={canManageChannels}
+        canDeleteChannels={canDeleteChannels}
         onSelect={selectRoom}
         spaceName={currentSpace?.name ?? "Fray"}
         isOnline={isOnline}
@@ -539,6 +613,7 @@ const App = () => {
         onMoveRoomByStep={moveRoomByStep}
         onMoveRoomToCategory={moveRoomToCategory}
         onReorderRoom={reorderRoom}
+        onDeleteCategory={deleteCategory}
         onDeleteRoom={deleteRoom}
       />
 
@@ -672,6 +747,7 @@ const App = () => {
           permissionOverrides={currentPermissionOverrides}
           moderationAudit={currentModerationAudit}
           canManageChannels={canManageChannels}
+          canDeleteChannels={canDeleteChannels}
           users={users}
           activeTab={serverSettingsTab}
           onTabChange={setServerSettingsTab}
@@ -741,7 +817,11 @@ const App = () => {
         onJumpToLatest={handleJumpToLatest}
       />
 
-      <NotificationTray notifications={notifications} onDismiss={dismissNotification} />
+      <NotificationTray
+        notifications={notifications}
+        onDismiss={dismissNotification}
+        onAction={handleNotificationAction}
+      />
       <OnboardingOverlay
         step={onboardingStep}
         spaceName={currentSpace?.name ?? "Fray"}

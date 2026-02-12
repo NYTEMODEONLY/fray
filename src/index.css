@@ -1692,6 +1692,22 @@ textarea {
   margin: 4px 0;
 }
 
+.notification-action {
+  margin: 2px 0 6px;
+  border: 1px solid var(--accent-2);
+  background: rgba(124, 240, 255, 0.15);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.notification-action:hover {
+  background: rgba(124, 240, 255, 0.25);
+}
+
 .notification-time {
   font-size: 10px;
   color: var(--muted);
@@ -1759,6 +1775,32 @@ textarea {
   place-items: center;
   z-index: 35;
   padding: 18px;
+}
+
+.delete-confirm-card {
+  width: min(440px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delete-confirm-card h3 {
+  font-size: 18px;
+}
+
+.delete-confirm-card p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .settings-modal {

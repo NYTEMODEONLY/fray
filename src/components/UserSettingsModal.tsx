@@ -50,6 +50,7 @@ const tabs: Array<{ id: UserSettingsTab; label: string }> = [
 const keybindRows = [
   { combo: "Cmd/Ctrl + K", action: "Open command palette" },
   { combo: "Cmd/Ctrl + ,", action: "Open user settings" },
+  { combo: "Cmd/Ctrl + R", action: "Refresh app and install updates" },
   { combo: "Cmd/Ctrl + Shift + M", action: "Toggle member panel" },
   { combo: "Cmd/Ctrl + Shift + P", action: "Toggle pinned panel" }
 ];

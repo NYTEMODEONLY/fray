@@ -32,6 +32,7 @@ Fray is a **Matrix client**. Your community backend is your own **Matrix homeser
   - appearance, notifications, keybinds, text/input, accessibility
   - profile customization (display name, About Me, avatar upload/remove)
 - Command palette / quick switcher and keyboard shortcuts
+- Native desktop updater flow (GitHub release manifest + in-app install/relaunch)
 - MatrixRTC call controls (voice/video/screen share) in right utility stack
 - Local UX metrics capture + report generator (telemetry-free by default)
 - Tauri desktop wrapper (macOS/Windows/Linux)
@@ -97,6 +98,14 @@ npm run build
 npm run tauri:build
 ```
 
+### Refresh / Update Shortcut
+
+- `Cmd + R` (macOS) or `Ctrl + R` (Windows/Linux):
+  - checks for a new signed desktop release,
+  - downloads and installs it when available,
+  - relaunches Fray automatically.
+- If no update is available, it performs a normal app refresh.
+
 ---
 
 ## Connecting to a Homeserver
@@ -117,6 +126,7 @@ Fray does not ship a central backend. You host a Matrix homeserver and connect F
 
 - Hosting requirements: [docs/hosting-requirements.md](docs/hosting-requirements.md)
 - VPS deployment/runbook: [docs/vps-matrix-runbook.md](docs/vps-matrix-runbook.md)
+- Desktop update setup: [docs/desktop-updates.md](docs/desktop-updates.md)
 - Overhaul architecture notes: [docs/discord-familiar-overhaul-architecture.md](docs/discord-familiar-overhaul-architecture.md)
 - Rollout gates/checklist: [docs/phase6-rollout-checklist.md](docs/phase6-rollout-checklist.md)
 

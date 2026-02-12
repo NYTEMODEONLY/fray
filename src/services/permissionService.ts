@@ -129,7 +129,7 @@ const applyRule = (base: boolean, rule: PermissionRule) => {
   return base;
 };
 
-const getRoleAssignedPowerLevel = (
+export const getRoleAssignedPowerLevel = (
   userId: string,
   roleSettings: ServerSettings["roles"]
 ) => {
@@ -150,7 +150,7 @@ const getRoleAssignedPowerLevel = (
   return Math.max(defaultLevel, assignedPower);
 };
 
-const hasRolePermissionGrant = (
+export const hasRolePermissionGrant = (
   userId: string,
   roleSettings: ServerSettings["roles"],
   action: PermissionAction
@@ -161,6 +161,23 @@ const hasRolePermissionGrant = (
     if (!assignedRoleIds.has(role.id)) return false;
     return role.permissions?.[action] === true;
   });
+};
+
+export const canDeleteChannelsAndCategories = (input: {
+  userId: string;
+  membership: MatrixMembership;
+  powerLevels: MatrixPowerLevels;
+  roleSettings: ServerSettings["roles"];
+}) => {
+  if (input.membership !== "join") return false;
+  const matrixPowerLevel = getUserPowerLevel(input.powerLevels, input.userId);
+  const roleAssignedPowerLevel = getRoleAssignedPowerLevel(input.userId, input.roleSettings);
+  const effectivePowerLevel = Math.max(matrixPowerLevel, roleAssignedPowerLevel);
+  const isServerAdmin = effectivePowerLevel >= input.roleSettings.adminLevel;
+  return (
+    isServerAdmin ||
+    hasRolePermissionGrant(input.userId, input.roleSettings, "manageChannels")
+  );
 };
 
 export const buildPermissionSnapshot = ({

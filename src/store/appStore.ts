@@ -2,10 +2,12 @@ import { create } from "zustand";
 import {
   ClientEvent,
   EventType,
+  EventStatus,
   GroupCallEvent,
   GroupCallIntent,
   GroupCallType,
   IndexedDBStore,
+  MatrixEventEvent,
   MatrixClient,
   MsgType,
   NotificationCountType,
@@ -16,12 +18,14 @@ import {
   createClient
 } from "matrix-js-sdk";
 import { CallFeed } from "matrix-js-sdk/lib/webrtc/callFeed";
+import { invoke } from "@tauri-apps/api/core";
 import { messages as mockMessages, me as mockMe, rooms as mockRooms, spaces as mockSpaces, users as mockUsers } from "../data/mock";
 import {
   Attachment,
   Category,
   Message,
   ModerationAuditEvent,
+  NotificationAction,
   NotificationItem,
   PERMISSION_ACTIONS,
   PermissionAction,
@@ -36,6 +40,7 @@ import {
   User
 } from "../types";
 import { trackLocalMetricEvent } from "../services/localMetricsService";
+import { canDeleteChannelsAndCategories, parsePowerLevels } from "../services/permissionService";
 
 const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -51,6 +56,13 @@ const DEFAULT_CATEGORY_ID = "channels";
 const DEFAULT_CATEGORY_NAME = "Channels";
 
 const DEFAULT_SPACE: Space = { id: "all", name: "All Rooms", icon: "M" };
+
+const toMembership = (value: string | undefined) => {
+  if (value === "join" || value === "invite" || value === "leave" || value === "ban" || value === "knock") {
+    return value;
+  }
+  return "unknown";
+};
 
 type MatrixStatus = "idle" | "connecting" | "syncing" | "error";
 export type ServerSettingsTab = "overview" | "roles" | "members" | "channels" | "invites" | "moderation";
@@ -173,7 +185,7 @@ interface AppState {
   setTheme: (value: "dark" | "light") => void;
   setOnline: (value: boolean) => void;
   dismissNotification: (id: string) => void;
-  pushNotification: (title: string, body: string) => void;
+  pushNotification: (title: string, body: string, options?: { action?: NotificationAction }) => void;
   setComposerEnterToSend: (value: boolean) => void;
   setMessageDensity: (value: "cozy" | "compact") => void;
   setNotificationsEnabled: (value: boolean) => void;
@@ -309,11 +321,16 @@ const toPreferencesFromState = (
   profileAvatarDataUrl: state.profileAvatarDataUrl
 });
 
-const createNotification = (title: string, body: string): NotificationItem => ({
+const createNotification = (
+  title: string,
+  body: string,
+  options?: { action?: NotificationAction }
+): NotificationItem => ({
   id: uid("n"),
   title,
   body,
-  timestamp: Date.now()
+  timestamp: Date.now(),
+  action: options?.action
 });
 
 const loadSession = (): MatrixSession | null => {
@@ -682,6 +699,323 @@ const normalizeServerSettings = (settings: Partial<ServerSettings> | null | unde
       )
     }
   };
+};
+
+const getRolePermissionGrant = (
+  roleSettings: ServerSettings["roles"],
+  userId: string,
+  action: PermissionAction
+) => {
+  const assignedRoleIds = new Set(roleSettings.memberRoleIds?.[userId] ?? []);
+  if (!assignedRoleIds.size) return false;
+  return (roleSettings.definitions ?? []).some((role) => {
+    if (!assignedRoleIds.has(role.id)) return false;
+    return role.permissions?.[action] === true;
+  });
+};
+
+const canCurrentUserDeleteChannelsInSpace = (
+  state: Pick<AppState, "matrixClient" | "me" | "serverSettingsBySpaceId" | "rooms">,
+  spaceId: string,
+  roomId: string
+) => {
+  const roleSettings = normalizeServerSettings(state.serverSettingsBySpaceId[spaceId] ?? null).roles;
+  if (!state.matrixClient) {
+    return true;
+  }
+
+  const matrixRoom =
+    state.matrixClient.getRoom(roomId) ??
+    state.matrixClient.getRoom(
+      state.rooms.find((room) => room.spaceId === spaceId && room.type !== "dm")?.id ?? ""
+    );
+  if (!matrixRoom) {
+    return getRolePermissionGrant(roleSettings, state.me.id, "manageChannels");
+  }
+
+  const powerLevelContent = matrixRoom.currentState.getStateEvents(EventType.RoomPowerLevels, "")?.getContent();
+  const powerLevels = parsePowerLevels(powerLevelContent);
+  const membership = toMembership(matrixRoom.getMember(state.me.id)?.membership);
+
+  return canDeleteChannelsAndCategories({
+    userId: state.me.id,
+    membership,
+    powerLevels,
+    roleSettings
+  });
+};
+
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, "");
+
+const readErrorBody = async (response: Response) => {
+  const text = await response.text().catch(() => "");
+  if (!text) return `HTTP ${response.status}`;
+  try {
+    const parsed = JSON.parse(text) as { error?: string };
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return `${response.status}: ${parsed.error}`;
+    }
+  } catch {
+    // Ignore JSON parse errors and return raw text.
+  }
+  return `${response.status}: ${text}`;
+};
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+
+interface SynapseDeleteRequest {
+  baseUrl: string;
+  accessToken: string;
+  roomId: string;
+  requesterUserId: string;
+}
+
+interface SynapseDeleteStatus {
+  status?: string;
+  error?: string;
+}
+
+const hasTauriRuntime = () => {
+  if (typeof window === "undefined") return false;
+  return typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
+};
+
+const parseSynapseDeleteStatus = (payload: unknown, deleteId: string): SynapseDeleteStatus => {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+  const content = payload as Record<string, unknown>;
+  const status = typeof content.status === "string" ? content.status : undefined;
+  const directError = typeof content.error === "string" ? content.error : undefined;
+  if (status) {
+    const shutdown = content.shutdown_room;
+    const shutdownError =
+      shutdown && typeof shutdown === "object" && typeof (shutdown as Record<string, unknown>).error === "string"
+        ? ((shutdown as Record<string, unknown>).error as string)
+        : undefined;
+    return {
+      status,
+      error: directError ?? shutdownError
+    };
+  }
+
+  const results = Array.isArray(content.results) ? content.results : [];
+  const matchingEntry =
+    results.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      return (item as Record<string, unknown>).delete_id === deleteId;
+    }) ??
+    results.find((item) => item && typeof item === "object");
+  if (!matchingEntry || typeof matchingEntry !== "object") {
+    return {};
+  }
+
+  const entry = matchingEntry as Record<string, unknown>;
+  const entryStatus = typeof entry.status === "string" ? entry.status : undefined;
+  const entryError = typeof entry.error === "string" ? entry.error : undefined;
+  const shutdown = entry.shutdown_room;
+  const shutdownError =
+    shutdown && typeof shutdown === "object" && typeof (shutdown as Record<string, unknown>).error === "string"
+      ? ((shutdown as Record<string, unknown>).error as string)
+      : undefined;
+  return {
+    status: entryStatus,
+    error: entryError ?? shutdownError
+  };
+};
+
+const isSynapseDeleteComplete = (status: string | undefined) =>
+  typeof status === "string" && status.toLowerCase() === "complete";
+
+const isSynapseDeleteFailed = (status: string | undefined) =>
+  typeof status === "string" && status.toLowerCase() === "failed";
+
+const pollSynapseDeleteStatus = async ({
+  baseUrl,
+  roomId,
+  deleteId,
+  accessToken
+}: {
+  baseUrl: string;
+  roomId: string;
+  deleteId: string;
+  accessToken: string;
+}) => {
+  const encodedRoomId = encodeURIComponent(roomId);
+  const encodedDeleteId = encodeURIComponent(deleteId);
+  const headers = {
+    Authorization: `Bearer ${accessToken}`
+  };
+  const timeoutMs = 90_000;
+  const startedAt = Date.now();
+  let mode: "by-delete-id" | "by-room-id" = "by-delete-id";
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const statusUrl =
+      mode === "by-delete-id"
+        ? `${baseUrl}/_synapse/admin/v2/rooms/delete_status/${encodedDeleteId}`
+        : `${baseUrl}/_synapse/admin/v2/rooms/${encodedRoomId}/delete_status`;
+    const statusResponse = await fetch(statusUrl, {
+      method: "GET",
+      headers
+    });
+
+    if (statusResponse.status === 404 || statusResponse.status === 405) {
+      if (mode === "by-delete-id") {
+        mode = "by-room-id";
+        continue;
+      }
+      return;
+    }
+    if (!statusResponse.ok) {
+      throw new Error(await readErrorBody(statusResponse));
+    }
+
+    const payload = await statusResponse.json().catch(() => null);
+    const deleteStatus = parseSynapseDeleteStatus(payload, deleteId);
+    if (isSynapseDeleteComplete(deleteStatus.status)) {
+      return;
+    }
+    if (isSynapseDeleteFailed(deleteStatus.status)) {
+      throw new Error(deleteStatus.error ?? "Synapse room deletion failed.");
+    }
+    await delay(1500);
+  }
+
+  throw new Error("Timed out waiting for Synapse room purge completion.");
+};
+
+const waitForSynapseRoomRemoval = async ({
+  baseUrl,
+  roomId,
+  accessToken
+}: {
+  baseUrl: string;
+  roomId: string;
+  accessToken: string;
+}) => {
+  const encodedRoomId = encodeURIComponent(roomId);
+  const timeoutMs = 90_000;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const response = await fetch(`${baseUrl}/_synapse/admin/v1/rooms/${encodedRoomId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    if (response.status === 404) {
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(await readErrorBody(response));
+    }
+    await delay(1500);
+  }
+  throw new Error("Synapse still reports this room after deletion. Purge did not complete.");
+};
+
+const requestSynapseHardDelete = async ({
+  baseUrl,
+  accessToken,
+  roomId,
+  requesterUserId
+}: SynapseDeleteRequest) => {
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  if (hasTauriRuntime()) {
+    try {
+      await invoke("synapse_hard_delete_room", {
+        baseUrl: normalizedBase,
+        accessToken,
+        roomId,
+        requesterUserId
+      });
+      return;
+    } catch (error) {
+      // Fallback keeps browser-mode compatibility if native invoke is unavailable.
+      console.warn("Native Synapse hard-delete failed; falling back to fetch", error);
+    }
+  }
+
+  const encodedRoomId = encodeURIComponent(roomId);
+  const requestBody = {
+    block: true,
+    purge: true,
+    force_purge: true,
+    requester_user_id: requesterUserId
+  };
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json"
+  };
+
+  const attemptV2 = async () => {
+    const response = await fetch(`${normalizedBase}/_synapse/admin/v2/rooms/${encodedRoomId}`, {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+    if (response.status === 404 || response.status === 405) {
+      return false;
+    }
+    if (!response.ok) {
+      throw new Error(await readErrorBody(response));
+    }
+    const payload = (await response.json().catch(() => null)) as { delete_id?: string; status?: string } | null;
+    const deleteId = typeof payload?.delete_id === "string" ? payload.delete_id : null;
+    if (deleteId) {
+      await pollSynapseDeleteStatus({
+        baseUrl: normalizedBase,
+        roomId,
+        deleteId,
+        accessToken
+      });
+    }
+    return true;
+  };
+
+  const attemptV1Delete = async () => {
+    const response = await fetch(`${normalizedBase}/_synapse/admin/v1/rooms/${encodedRoomId}`, {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+    if (response.status === 404 || response.status === 405) {
+      return false;
+    }
+    if (!response.ok) {
+      throw new Error(await readErrorBody(response));
+    }
+    return true;
+  };
+
+  const attemptLegacyDelete = async () => {
+    const response = await fetch(`${normalizedBase}/_synapse/admin/v1/rooms/${encodedRoomId}/delete`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+    if (!response.ok) {
+      throw new Error(await readErrorBody(response));
+    }
+    return true;
+  };
+
+  const usedV2 = await attemptV2();
+  if (!usedV2) {
+    const usedV1 = await attemptV1Delete();
+    if (!usedV1) {
+      await attemptLegacyDelete();
+    }
+  }
+  await waitForSynapseRoomRemoval({
+    baseUrl: normalizedBase,
+    roomId,
+    accessToken
+  });
 };
 
 const createDefaultPermissionOverrides = (): SpacePermissionOverrides => ({
@@ -1490,8 +1824,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       .getRooms()
       .filter((room) => room.getType() !== "m.space")
       .filter((room) => {
+        const currentUserId = client.getUserId() ?? "";
         const membership =
-          typeof room.getMyMembership === "function" ? room.getMyMembership() : "join";
+          typeof room.getMyMembership === "function"
+            ? room.getMyMembership()
+            : typeof room.getMember === "function"
+              ? room.getMember(currentUserId)?.membership
+              : undefined;
         return membership === "join" || membership === "invite";
       })
       .filter((room) => !isRoomDeleted(room))
@@ -1696,9 +2035,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       notifications: state.notifications.filter((notification) => notification.id !== id)
     })),
-  pushNotification: (title, body) =>
+  pushNotification: (title, body, options) =>
     set((state) => ({
-      notifications: [createNotification(title, body), ...state.notifications]
+      notifications: [createNotification(title, body, options), ...state.notifications]
     })),
   setComposerEnterToSend: (value) => {
     savePreferences({ ...toPreferencesFromState(get()), composerEnterToSend: value });
@@ -2077,6 +2416,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!room || room.type === "dm") return;
 
     const spaceId = room.spaceId;
+    if (!canCurrentUserDeleteChannelsInSpace(state, spaceId, roomId)) {
+      get().pushNotification(
+        "Channel delete unavailable",
+        "Only server admins or roles explicitly granted Manage Channels can delete channels."
+      );
+      return;
+    }
     const spaceStateHostRoomId = resolveSpaceStateHostRoomId(
       { ...state, currentRoomId: roomId },
       spaceId
@@ -2105,30 +2451,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     setRoomOrderForCategory(nextLayout, categoryId, remainingRoomIds);
     delete nextLayout.rooms[roomId];
+    const fallbackHostRoomId =
+      remainingSpaceRooms.find((candidate) => candidate.type !== "dm")?.id ??
+      remainingSpaceRooms[0]?.id ??
+      "";
+    const currentStateHostRoomId = state.spaceStateHostRoomIdBySpaceId[spaceId];
+    const layoutHostRoomId =
+      currentStateHostRoomId === roomId ? fallbackHostRoomId : spaceStateHostRoomId;
 
     const client = state.matrixClient;
     if (client) {
-      try {
-        const typeEvent = client.getRoom(roomId)?.currentState.getStateEvents(ROOM_TYPE_EVENT, "");
-        const existingType = typeEvent?.getContent()?.type as RoomType | undefined;
-        await client.sendStateEvent(
-          roomId,
-          ROOM_TYPE_EVENT as any,
-          {
-            type: existingType ?? room.type,
-            deleted: true
-          },
-          ""
+      const session = state.matrixSession;
+      if (!session?.accessToken || !session.baseUrl) {
+        get().pushNotification(
+          "Failed to permanently delete channel",
+          "Missing Matrix session credentials for Synapse admin deletion."
         );
-      } catch (error) {
-        console.warn("Unable to set deleted marker on room; proceeding with leave/layout update", error);
+        return;
       }
 
       try {
-        await client.sendStateEvent(spaceStateHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "");
+        await requestSynapseHardDelete({
+          baseUrl: session.baseUrl,
+          accessToken: session.accessToken,
+          roomId,
+          requesterUserId: state.me.id
+        });
       } catch (error) {
-        get().pushNotification("Failed to delete channel", (error as Error).message);
+        get().pushNotification(
+          "Failed to permanently delete channel",
+          (error as Error).message
+        );
         return;
+      }
+
+      if (layoutHostRoomId) {
+        await client
+          .sendStateEvent(layoutHostRoomId, SPACE_LAYOUT_EVENT as any, nextLayout, "")
+          .catch((error) => {
+            get().pushNotification(
+              "Channel deleted with layout warning",
+              `Room was deleted, but layout sync failed: ${(error as Error).message}`
+            );
+          });
       }
     }
 
@@ -2137,7 +2502,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const nextSpaceRooms = getSpaceRooms(nextRooms, spaceId);
       const appliedRooms = applyLayoutToSpaceRooms(nextRooms, spaceId, nextLayout);
       const fallbackRoomId = nextSpaceRooms[0]?.id ?? appliedRooms[0]?.id ?? "";
-      const fallbackHostRoomId =
+      const nextFallbackHostRoomId =
         nextSpaceRooms.find((candidate) => candidate.type !== "dm")?.id ?? fallbackRoomId;
       const nextCurrentRoomId =
         current.currentRoomId === roomId ? fallbackRoomId : current.currentRoomId;
@@ -2146,9 +2511,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const nextCurrentSpaceId = currentRoomWasDeleted
         ? fallbackRoom?.spaceId ?? current.currentSpaceId
         : current.currentSpaceId;
-      const currentStateHostRoomId = current.spaceStateHostRoomIdBySpaceId[spaceId];
+      const currentHostRoomId = current.spaceStateHostRoomIdBySpaceId[spaceId];
       const nextStateHostRoomId =
-        currentStateHostRoomId === roomId ? fallbackHostRoomId : currentStateHostRoomId;
+        currentHostRoomId === roomId ? nextFallbackHostRoomId : currentHostRoomId;
       const nextMessagesByRoomId = { ...current.messagesByRoomId };
       const nextRoomLastReadTsByRoomId = { ...current.roomLastReadTsByRoomId };
       const nextThreadLastViewedTsByRoomId = { ...current.threadLastViewedTsByRoomId };
@@ -2192,7 +2557,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await client.forget(roomId).catch(() => undefined);
     }
 
-    get().pushNotification("Channel deleted", `${room.name} was removed.`);
+    get().pushNotification("Channel deleted", `${room.name} was permanently removed.`);
   },
   createSpace: async (name) => {
     const trimmed = name.trim();
@@ -2592,6 +2957,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const spaceId = state.currentSpaceId;
     if (!spaceId) return;
+    if (!canCurrentUserDeleteChannelsInSpace(state, spaceId, state.currentRoomId)) {
+      get().pushNotification(
+        "Category delete unavailable",
+        "Only server admins or roles explicitly granted Manage Channels can delete categories."
+      );
+      return;
+    }
     const spaceStateHostRoomId = resolveSpaceStateHostRoomId(state, spaceId);
     if (!spaceStateHostRoomId) return;
     const client = state.matrixClient;
@@ -3067,16 +3439,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const roomId = get().currentRoomId;
     const currentMessages = get().messagesByRoomId[roomId] ?? [];
     const targetMessage = currentMessages.find((message) => message.id === messageId);
-    const auditEntry: ModerationAuditEvent = {
+    const createAuditEntry = (
+      targetEventId: string,
+      sourceEventId: string = targetEventId
+    ): ModerationAuditEvent => ({
       id: uid("audit"),
       action: "message.redact",
       actorId: get().me.id,
-      target: targetMessage ? `${targetMessage.authorId}:${messageId}` : messageId,
+      target: targetMessage ? `${targetMessage.authorId}:${targetEventId}` : targetEventId,
       timestamp: Date.now(),
-      sourceEventId: messageId
-    };
+      sourceEventId
+    });
 
     if (!client) {
+      const auditEntry = createAuditEntry(messageId);
       set((state) => ({
         messagesByRoomId: {
           ...state.messagesByRoomId,
@@ -3098,9 +3474,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const room = client.getRoom(roomId);
     if (!room) return;
 
-    try {
-      await client.redactEvent(room.roomId, messageId);
+    const commitMatrixDelete = async (targetEventId: string, sourceEventId: string = targetEventId) => {
       const messages = mapEventsToMessages(client, room);
+      const auditEntry = createAuditEntry(targetEventId, sourceEventId);
       const nextAudit = [auditEntry, ...(get().moderationAuditBySpaceId[spaceId] ?? [])].slice(0, 250);
       await client
         .sendStateEvent(spaceId, AUDIT_LOG_EVENT as any, { version: 1, events: nextAudit }, "")
@@ -3118,6 +3494,67 @@ export const useAppStore = create<AppState>((set, get) => ({
         action: "redact",
         roomId: room.roomId
       });
+    };
+
+    const redactServerEvent = async (targetEventId: string, sourceEventId: string = targetEventId) => {
+      await client.redactEvent(room.roomId, targetEventId);
+      await commitMatrixDelete(targetEventId, sourceEventId);
+    };
+
+    if (messageId.startsWith("~")) {
+      const localEvent = typeof room.findEventById === "function" ? room.findEventById(messageId) : undefined;
+      const localStatus = localEvent?.status ?? null;
+
+      if (
+        localEvent &&
+        (localStatus === EventStatus.QUEUED ||
+          localStatus === EventStatus.NOT_SENT ||
+          localStatus === EventStatus.ENCRYPTING)
+      ) {
+        try {
+          client.cancelPendingEvent(localEvent);
+          await commitMatrixDelete(messageId);
+          return;
+        } catch (error) {
+          console.warn("Failed to cancel pending event before delete, retrying via remote echo path", error);
+        }
+      }
+
+      const localIdPrefix = `~${room.roomId}:`;
+      const transactionId = messageId.startsWith(localIdPrefix) ? messageId.slice(localIdPrefix.length) : null;
+      if (transactionId) {
+        const remoteEchoEvent = (room.getLiveTimeline?.().getEvents?.() ?? []).find(
+          (event) => event.getUnsigned()?.transaction_id === transactionId
+        );
+        const remoteEchoEventId = remoteEchoEvent?.getId();
+        if (remoteEchoEventId && !remoteEchoEventId.startsWith("~")) {
+          try {
+            await redactServerEvent(remoteEchoEventId, messageId);
+          } catch (error) {
+            get().pushNotification("Unable to delete message", (error as Error).message);
+          }
+          return;
+        }
+      }
+
+      if (localEvent) {
+        localEvent.once(MatrixEventEvent.LocalEventIdReplaced, (event) => {
+          const remoteEventId = event.getId();
+          if (!remoteEventId || remoteEventId.startsWith("~")) return;
+          void redactServerEvent(remoteEventId, messageId).catch((error) => {
+            get().pushNotification("Unable to delete message", (error as Error).message);
+          });
+        });
+        get().pushNotification("Delete queued", "Message is still sending and will be deleted after sync.");
+        return;
+      }
+
+      get().pushNotification("Unable to delete message", "Message is still syncing. Try again in a moment.");
+      return;
+    }
+
+    try {
+      await redactServerEvent(messageId);
     } catch (error) {
       get().pushNotification("Unable to delete message", (error as Error).message);
     }
