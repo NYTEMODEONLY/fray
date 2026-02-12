@@ -17,3 +17,4 @@ src-tauri/gen/
 .tauri-dev.log
 fray-mvp.png
 tsconfig.tsbuildinfo
+tasks/
