@@ -25,10 +25,25 @@ const containsSearchText = (message: Message, query: string) => {
 export const messageContainsLink = (message: Message) =>
   /https?:\/\/|www\./i.test(message.body);
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildMentionPattern = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  const token = normalized.startsWith("@") ? normalized : `@${normalized}`;
+  return new RegExp(`(^|[^a-zA-Z0-9_])${escapeRegExp(token)}(?=$|[^a-zA-Z0-9_])`, "i");
+};
+
+const hasStandaloneMention = (body: string, value: string) => {
+  const pattern = buildMentionPattern(value);
+  if (!pattern) return false;
+  return pattern.test(body);
+};
+
 export const messageMentionsUser = (message: Message, meId: string, meName: string) => {
-  const body = message.body.toLowerCase();
-  const mentionByName = meName ? body.includes(`@${meName.toLowerCase()}`) : false;
-  const mentionById = meId ? body.includes(`@${meId.toLowerCase()}`) : false;
+  const body = message.body;
+  const mentionByName = meName ? hasStandaloneMention(body, meName) : false;
+  const mentionById = meId ? hasStandaloneMention(body, meId) : false;
   return mentionByName || mentionById;
 };
 

@@ -52,6 +52,7 @@ interface MessageListProps {
   unreadCount: number;
   roomLastReadTs: number;
   onJumpToLatest: () => void;
+  onOpenMessageLink?: (href: string) => boolean;
 }
 
 const THREAD_GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -124,6 +125,12 @@ const clampMenuPoint = (x: number, y: number) => {
   };
 };
 
+const shouldShowOverflowActionTrigger = () => {
+  if (typeof window === "undefined") return true;
+  if (typeof window.matchMedia !== "function") return true;
+  return !window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+};
+
 export const MessageList = ({
   messages,
   users,
@@ -151,7 +158,8 @@ export const MessageList = ({
   threadSummaryByRootId,
   unreadCount,
   roomLastReadTs,
-  onJumpToLatest
+  onJumpToLatest,
+  onOpenMessageLink
 }: MessageListProps) => {
   const listRef = useRef<HTMLDivElement | null>(null);
   const wasLoadingRef = useRef(false);
@@ -162,6 +170,9 @@ export const MessageList = ({
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [contextMenu, setContextMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
+  const [showOverflowActionTrigger, setShowOverflowActionTrigger] = useState(
+    () => shouldShowOverflowActionTrigger()
+  );
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
   const messageMap = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const searchResultSet = useMemo(() => new Set(searchResultIds), [searchResultIds]);
@@ -198,6 +209,22 @@ export const MessageList = ({
   useEffect(() => {
     const intervalId = window.setInterval(() => setNowTs(Date.now()), MINUTE_MS);
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (typeof window.matchMedia !== "function") return undefined;
+    const hoverMedia = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const syncTriggerVisibility = () => {
+      setShowOverflowActionTrigger(!hoverMedia.matches);
+    };
+    syncTriggerVisibility();
+    if (typeof hoverMedia.addEventListener === "function") {
+      hoverMedia.addEventListener("change", syncTriggerVisibility);
+      return () => hoverMedia.removeEventListener("change", syncTriggerVisibility);
+    }
+    hoverMedia.addListener(syncTriggerVisibility);
+    return () => hoverMedia.removeListener(syncTriggerVisibility);
   }, []);
 
   useEffect(() => {
@@ -274,6 +301,19 @@ export const MessageList = ({
     setContextMenu(null);
   };
 
+  const handleMessageTextClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!onOpenMessageLink) return;
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest("a");
+    if (!anchor) return;
+    const href = (anchor as HTMLAnchorElement).href;
+    if (!href) return;
+    const handled = onOpenMessageLink(href);
+    if (handled) {
+      event.preventDefault();
+    }
+  };
+
   const openMessageContextMenu = (event: ReactMouseEvent, messageId: string) => {
     event.preventDefault();
     const point = clampMenuPoint(event.clientX, event.clientY);
@@ -303,16 +343,18 @@ export const MessageList = ({
       )}
       {presentationRows.map(({ message, groupedWithPrevious, showDaySeparator, showUnreadSeparator }) => {
         const author = userMap.get(message.authorId);
+        const isSystemMessage = message.system === true;
         const canRedact = canRedactMessage(message.authorId);
         const canCopyLink = permissionSnapshot.membership === "join";
         const threadSummary = threadSummaryByRootId[message.id];
         const hasThreadReplies = (threadSummary?.totalReplies ?? 0) > 0;
         const mentionHit =
-          message.authorId !== meId && messageMentionsUser(message, meId, meName);
+          !isSystemMessage && message.authorId !== meId && messageMentionsUser(message, meId, meName);
         const searchHit = searchResultSet.has(message.id);
         const isActiveSearchHit = activeSearchResultId === message.id;
         const articleClasses = [
           "message",
+          isSystemMessage ? "system" : "",
           groupedWithPrevious ? "grouped" : "",
           mentionHit ? "mention-hit" : "",
           searchHit ? "search-hit" : "",
@@ -341,13 +383,18 @@ export const MessageList = ({
                 messageNodeMapRef.current[message.id] = node;
               }}
               className={articleClasses}
-              onContextMenu={(event) => openMessageContextMenu(event, message.id)}
+              onContextMenu={(event) => {
+                if (isSystemMessage) return;
+                openMessageContextMenu(event, message.id);
+              }}
             >
-              <div className={author?.id === meId ? "avatar me" : "avatar"}>
+              <div className={author?.id === meId ? "avatar me" : isSystemMessage ? "avatar system" : "avatar"}>
                 {groupedWithPrevious || messageDensity === "compact" ? (
                   ""
                 ) : author?.avatarUrl ? (
                   <img src={author.avatarUrl} alt={`${author.name} avatar`} />
+                ) : isSystemMessage ? (
+                  "•"
                 ) : (
                   author?.avatar ?? "?"
                 )}
@@ -357,9 +404,9 @@ export const MessageList = ({
                   <div className="message-meta">
                     <span
                       className="message-author"
-                      style={author?.roleColor ? { color: author.roleColor } : undefined}
+                      style={isSystemMessage ? undefined : author?.roleColor ? { color: author.roleColor } : undefined}
                     >
-                      {author?.name ?? "Unknown"}
+                      {isSystemMessage ? "System" : author?.name ?? "Unknown"}
                     </span>
                     <span className="message-time" title={new Date(message.timestamp).toLocaleString()}>
                       {absoluteMeta}
@@ -367,104 +414,122 @@ export const MessageList = ({
                     <span className="message-time-relative">{relativeMeta}</span>
                     {message.status === "queued" && <span className="message-queued">queued</span>}
                     {message.pinned && <span className="message-pinned">pinned</span>}
-                    <button
-                      className="message-more"
-                      aria-label="Message actions"
-                      aria-expanded={actionsOpenFor === message.id}
-                      onClick={() =>
-                        setActionsOpenFor((current) => (current === message.id ? null : message.id))
-                      }
-                    >
-                      <MoreHorizontal size={14} aria-hidden="true" />
-                    </button>
+                    {!isSystemMessage && showOverflowActionTrigger && (
+                      <button
+                        className="message-more"
+                        aria-label="Message actions"
+                        aria-expanded={actionsOpenFor === message.id}
+                        onClick={() =>
+                          setActionsOpenFor((current) => (current === message.id ? null : message.id))
+                        }
+                      >
+                        <MoreHorizontal size={14} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="message-sub-meta">
                     <span title={absoluteMeta}>{formatTime(message.timestamp)}</span>
                     <span className="message-time-relative">{relativeMeta}</span>
-                    <button
-                      className="message-more"
-                      aria-label="Message actions"
-                      aria-expanded={actionsOpenFor === message.id}
-                      onClick={() =>
-                        setActionsOpenFor((current) => (current === message.id ? null : message.id))
-                      }
-                    >
-                      <MoreHorizontal size={14} aria-hidden="true" />
-                    </button>
+                    {!isSystemMessage && showOverflowActionTrigger && (
+                      <button
+                        className="message-more"
+                        aria-label="Message actions"
+                        aria-expanded={actionsOpenFor === message.id}
+                        onClick={() =>
+                          setActionsOpenFor((current) => (current === message.id ? null : message.id))
+                        }
+                      >
+                        <MoreHorizontal size={14} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                 )}
 
-                <div className="message-toolbar" role="toolbar" aria-label="Message actions">
-                  {permissionSnapshot.actions.react && (
-                    <div className="message-emoji-picker-wrap">
+                {!isSystemMessage && (
+                  <div className="message-toolbar" role="toolbar" aria-label="Message actions">
+                    {permissionSnapshot.actions.react && (
+                      <div className="message-emoji-picker-wrap">
+                        <button
+                          className="toolbar-button"
+                          aria-label="Add reaction"
+                          onClick={() =>
+                            setEmojiPickerFor((current) => (current === message.id ? null : message.id))
+                          }
+                        >
+                          <SmilePlus size={14} aria-hidden="true" />
+                        </button>
+                        {emojiPickerFor === message.id && (
+                          <div className="message-emoji-picker">
+                            {EMOJI_OPTIONS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onClick={() => runAction(() => onReact(message.id, emoji))}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {permissionSnapshot.actions.send && (
+                      <>
+                        <button className="toolbar-button" aria-label="Reply" onClick={() => runAction(() => onReply(message.id))}>
+                          <CornerUpLeft size={14} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="toolbar-button"
+                          aria-label="Quick Reply"
+                          onClick={() => runAction(() => onQuickReply(message.id))}
+                        >
+                          <Send size={14} aria-hidden="true" />
+                        </button>
+                        <button className="toolbar-button" aria-label="Thread" onClick={() => runAction(() => onThread(message.id))}>
+                          <MessageCircle size={14} aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
+                    {permissionSnapshot.actions.pin && (
                       <button
                         className="toolbar-button"
-                        aria-label="Add reaction"
-                        onClick={() =>
-                          setEmojiPickerFor((current) => (current === message.id ? null : message.id))
-                        }
+                        aria-label={message.pinned ? "Unpin" : "Pin"}
+                        onClick={() => runAction(() => onPin(message.id))}
                       >
-                        <SmilePlus size={14} aria-hidden="true" />
+                        <Pin size={14} aria-hidden="true" />
                       </button>
-                      {emojiPickerFor === message.id && (
-                        <div className="message-emoji-picker">
-                          {EMOJI_OPTIONS.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => runAction(() => onReact(message.id, emoji))}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {permissionSnapshot.actions.send && (
-                    <>
-                      <button className="toolbar-button" aria-label="Reply" onClick={() => runAction(() => onReply(message.id))}>
-                        <CornerUpLeft size={14} aria-hidden="true" />
+                    )}
+                    {canCopyLink && (
+                      <button className="toolbar-button" aria-label="Copy Link" onClick={() => runAction(() => onCopyLink(message.id))}>
+                        <Link2 size={14} aria-hidden="true" />
                       </button>
-                      <button
-                        className="toolbar-button"
-                        aria-label="Quick Reply"
-                        onClick={() => runAction(() => onQuickReply(message.id))}
-                      >
-                        <Send size={14} aria-hidden="true" />
+                    )}
+                    {canRedact && (
+                      <button className="toolbar-button danger" aria-label="Delete" onClick={() => runAction(() => onRedact(message.id))}>
+                        <Trash2 size={14} aria-hidden="true" />
                       </button>
-                      <button className="toolbar-button" aria-label="Thread" onClick={() => runAction(() => onThread(message.id))}>
-                        <MessageCircle size={14} aria-hidden="true" />
-                      </button>
-                    </>
-                  )}
-                  {permissionSnapshot.actions.pin && (
-                    <button
-                      className="toolbar-button"
-                      aria-label={message.pinned ? "Unpin" : "Pin"}
-                      onClick={() => runAction(() => onPin(message.id))}
-                    >
-                      <Pin size={14} aria-hidden="true" />
-                    </button>
-                  )}
-                  {canCopyLink && (
-                    <button className="toolbar-button" aria-label="Copy Link" onClick={() => runAction(() => onCopyLink(message.id))}>
-                      <Link2 size={14} aria-hidden="true" />
-                    </button>
-                  )}
-                  {canRedact && (
-                    <button className="toolbar-button danger" aria-label="Delete" onClick={() => runAction(() => onRedact(message.id))}>
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
-                {message.replyToId && (
-                  <div className="message-reply">Replying to #{message.replyToId.slice(0, 4)}</div>
+                {!isSystemMessage && message.replyToId && (
+                  <div className="message-reply">
+                    {(() => {
+                      const replyTarget = messageMap.get(message.replyToId ?? "");
+                      if (!replyTarget) {
+                        return `Replying to #${message.replyToId.slice(0, 4)}`;
+                      }
+                      const replyAuthor = userMap.get(replyTarget.authorId)?.name ?? "Unknown";
+                      const trimmed = replyTarget.body.trim();
+                      const preview = trimmed.length > 56 ? `${trimmed.slice(0, 56)}...` : trimmed;
+                      return `Replying to ${replyAuthor}: ${preview || "(empty message)"}`;
+                    })()}
+                  </div>
                 )}
 
                 <div
                   className="message-text"
+                  onClick={handleMessageTextClick}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(message.body) }}
                 />
 
@@ -490,14 +555,14 @@ export const MessageList = ({
                   </div>
                 )}
 
-                {hasThreadReplies && (
+                {!isSystemMessage && hasThreadReplies && (
                   <button className="message-thread-indicator" onClick={() => onThread(message.id)}>
                     {threadSummary.totalReplies} repl{threadSummary.totalReplies === 1 ? "y" : "ies"}
                     {threadSummary.unreadReplies > 0 ? ` · ${threadSummary.unreadReplies} new` : ""}
                   </button>
                 )}
 
-                {message.reactions.length > 0 && (
+                {!isSystemMessage && message.reactions.length > 0 && (
                   <div className="message-reactions">
                     {message.reactions.map((reaction) => (
                       <button

@@ -128,6 +128,7 @@ Fray does not ship a central backend. You host a Matrix homeserver and connect F
 - VPS deployment/runbook: [docs/vps-matrix-runbook.md](docs/vps-matrix-runbook.md)
 - Desktop update setup: [docs/desktop-updates.md](docs/desktop-updates.md)
 - Overhaul architecture notes: [docs/discord-familiar-overhaul-architecture.md](docs/discord-familiar-overhaul-architecture.md)
+- Matrix/Synapse parity roadmap: [docs/matrix-synapse-parity-roadmap.md](docs/matrix-synapse-parity-roadmap.md)
 - Rollout gates/checklist: [docs/phase6-rollout-checklist.md](docs/phase6-rollout-checklist.md)
 
 ---

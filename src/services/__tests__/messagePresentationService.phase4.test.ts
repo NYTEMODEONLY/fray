@@ -94,5 +94,47 @@ describe("Phase 4 message presentation service", () => {
   it("detects link and mention content", () => {
     expect(messageContainsLink(messages[1])).toBe(true);
     expect(messageMentionsUser(messages[1], "@me:example.com", "me")).toBe(true);
+    expect(
+      messageMentionsUser(
+        {
+          id: "m4",
+          roomId: "r1",
+          authorId: "@ava:example.com",
+          body: "@memo this should not ping @me",
+          timestamp: 1_700_000_090_000,
+          reactions: []
+        },
+        "@me:example.com",
+        "me"
+      )
+    ).toBe(true);
+    expect(
+      messageMentionsUser(
+        {
+          id: "m5",
+          roomId: "r1",
+          authorId: "@ava:example.com",
+          body: "@memo this should not ping me-id",
+          timestamp: 1_700_000_100_000,
+          reactions: []
+        },
+        "@me:example.com",
+        "me"
+      )
+    ).toBe(false);
+    expect(
+      messageMentionsUser(
+        {
+          id: "m6",
+          roomId: "r1",
+          authorId: "@ava:example.com",
+          body: "Please review this with @me:example.com today",
+          timestamp: 1_700_000_110_000,
+          reactions: []
+        },
+        "@me:example.com",
+        "me"
+      )
+    ).toBe(true);
   });
 });

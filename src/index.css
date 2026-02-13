@@ -489,6 +489,10 @@ textarea {
   color: var(--muted);
 }
 
+.create-row.create-row-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .channel-account {
   margin-top: auto;
   border-top: 1px solid var(--border);
@@ -693,6 +697,7 @@ textarea {
 .search .pill:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .chat-body {
@@ -812,6 +817,14 @@ textarea {
   background: rgba(41, 43, 48, 0.62);
 }
 
+.message.system {
+  grid-template-columns: 30px 1fr;
+}
+
+.message.system .message-body {
+  padding-bottom: 2px;
+}
+
 .message.grouped {
   margin-top: -2px;
 }
@@ -854,6 +867,13 @@ textarea {
 .avatar.me {
   background: var(--accent);
   color: #fff;
+}
+
+.avatar.system {
+  background: #2a2d32;
+  border-color: #3a3d45;
+  color: #9ca2ae;
+  font-size: 18px;
 }
 
 .avatar.online {
@@ -934,6 +954,8 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 5;
 }
 
 .message:hover .message-more,
@@ -941,6 +963,17 @@ textarea {
 .message.actions-open .message-more {
   opacity: 1;
   pointer-events: auto;
+}
+
+.message.actions-open .message-more {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .message-more {
+    display: none;
+  }
 }
 
 .message.search-hit .message-body {
@@ -983,12 +1016,32 @@ textarea {
   line-height: 1.45;
 }
 
+.message.system .message-author {
+  color: #9ca2ae;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.message.system .message-text {
+  color: #b5bac5;
+  font-style: italic;
+}
+
 .message-text code,
 .message-text pre {
   font-family: "IBM Plex Mono", monospace;
   background: rgba(0, 0, 0, 0.3);
   padding: 2px 6px;
   border-radius: 6px;
+}
+
+.message-text u {
+  text-decoration-thickness: 1.5px;
+}
+
+.message-text del {
+  opacity: 0.9;
 }
 
 .message-text pre {

@@ -30,6 +30,7 @@ interface ChannelListProps {
   isOnline: boolean;
   onToggleOnline: () => void;
   onCreateRoom: (payload: { name: string; type: Room["type"]; category?: string }) => void;
+  onCreateCategory: (name: string) => Promise<void> | void;
   onInvite: () => void;
   onOpenSpaceSettings: () => void;
   spaceSettingsEnabled: boolean;
@@ -96,6 +97,7 @@ export const ChannelList = ({
   isOnline,
   onToggleOnline,
   onCreateRoom,
+  onCreateCategory,
   onInvite,
   onOpenSpaceSettings,
   spaceSettingsEnabled,
@@ -111,6 +113,7 @@ export const ChannelList = ({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [newType, setNewType] = useState<Room["type"]>("text");
   const [newCategory, setNewCategory] = useState(categories[0]?.id ?? DEFAULT_CATEGORY_ID);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -239,6 +242,15 @@ export const ChannelList = ({
     onCreateRoom({ name, type: newType, category: newCategory });
     setNewName("");
     setShowCreate(false);
+  };
+
+  const handleCreateCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    runSafely(async () => {
+      await onCreateCategory(name);
+      setNewCategoryName("");
+    });
   };
 
   const handleDropOnCategory = (event: ReactDragEvent<HTMLElement>, targetCategoryId: string) => {
@@ -495,6 +507,21 @@ export const ChannelList = ({
           </div>
           <button className="primary" onClick={handleCreate} disabled={!canManageChannels}>
             Create
+          </button>
+          <p className="eyebrow">Create Category</p>
+          <div className="create-row create-row-single">
+            <label>
+              Name
+              <input
+                value={newCategoryName}
+                onChange={(event) => setNewCategoryName(event.target.value)}
+                placeholder="new-category"
+                disabled={!canManageChannels}
+              />
+            </label>
+          </div>
+          <button className="primary" onClick={handleCreateCategory} disabled={!canManageChannels}>
+            Add Category
           </button>
         </div>
       )}

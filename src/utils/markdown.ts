@@ -15,12 +15,19 @@ marked.use({ renderer });
 const spoilerize = (value: string) =>
   value.replace(/\|\|(.+?)\|\|/g, "<span class=\"spoiler\">$1</span>");
 
+const underlineize = (value: string) =>
+  value.replace(/__(.+?)__/g, "<u>$1</u>");
+
 const mentionize = (value: string) =>
-  value.replace(/(^|\s)@([a-zA-Z0-9_-]+)/g, "$1<span class=\"mention\">@$2</span>");
+  value.replace(
+    /(^|[^a-zA-Z0-9_])(@[a-zA-Z0-9._:-]{1,255})/g,
+    "$1<span class=\"mention\">$2</span>"
+  );
 
 export const renderMarkdown = (value: string) => {
   const withSpoilers = spoilerize(value);
-  const withMentions = mentionize(withSpoilers);
+  const withUnderline = underlineize(withSpoilers);
+  const withMentions = mentionize(withUnderline);
   const html = marked.parse(withMentions) as string;
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
@@ -28,6 +35,8 @@ export const renderMarkdown = (value: string) => {
       "p",
       "strong",
       "em",
+      "u",
+      "del",
       "code",
       "pre",
       "blockquote",

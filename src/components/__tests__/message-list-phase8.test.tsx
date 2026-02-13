@@ -29,6 +29,77 @@ afterEach(() => {
 });
 
 describe("Phase 8 message timestamp and context actions", () => {
+  it("hides overflow trigger when hover toolbar is available", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(hover: hover) and (pointer: fine)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    });
+
+    try {
+      const messages: Message[] = [
+        {
+          id: "$event1",
+          roomId: "!room:example.com",
+          authorId: "@ava:example.com",
+          body: "hover actions",
+          timestamp: Date.now(),
+          reactions: []
+        }
+      ];
+
+      render(
+        <MessageList
+          messages={messages}
+          users={users}
+          meId="@me:example.com"
+          meName="me"
+          messageDensity="cozy"
+          permissionSnapshot={permissionSnapshot}
+          onReact={vi.fn()}
+          onReply={vi.fn()}
+          onQuickReply={vi.fn()}
+          onThread={vi.fn()}
+          onPin={vi.fn()}
+          onRedact={vi.fn()}
+          onCopyLink={vi.fn()}
+          canRedactMessage={() => true}
+          onLoadOlder={vi.fn().mockResolvedValue(undefined)}
+          isLoadingHistory={false}
+          canLoadMoreHistory={false}
+          searchQuery=""
+          searchFilter="all"
+          searchResultIds={[]}
+          activeSearchResultId={null}
+          focusMessageId={null}
+          onFocusHandled={vi.fn()}
+          threadSummaryByRootId={{}}
+          unreadCount={0}
+          roomLastReadTs={0}
+          onJumpToLatest={vi.fn()}
+        />
+      );
+
+      expect(screen.queryByRole("button", { name: "Message actions" })).toBeNull();
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia
+      });
+    }
+  });
+
   it("renders relative + absolute timestamps", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-11T12:00:00.000Z"));
@@ -135,5 +206,107 @@ describe("Phase 8 message timestamp and context actions", () => {
     expect(contextMenu).toBeTruthy();
     await user.click(within(contextMenu as HTMLElement).getByRole("button", { name: "Copy Link" }));
     expect(onCopyLink).toHaveBeenCalledWith("$event1");
+  });
+
+  it("routes matrix message links through in-app jump handler", async () => {
+    const user = userEvent.setup();
+    const onOpenMessageLink = vi.fn((href: string) => Boolean(href));
+    const messages: Message[] = [
+      {
+        id: "$event1",
+        roomId: "!room:example.com",
+        authorId: "@ava:example.com",
+        body: "[Jump](https://matrix.to/#/%21room%3Aexample.com/%24event1)",
+        timestamp: Date.now(),
+        reactions: []
+      }
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        users={users}
+        meId="@me:example.com"
+        meName="me"
+        messageDensity="cozy"
+        permissionSnapshot={permissionSnapshot}
+        onReact={vi.fn()}
+        onReply={vi.fn()}
+        onQuickReply={vi.fn()}
+        onThread={vi.fn()}
+        onPin={vi.fn()}
+        onRedact={vi.fn()}
+        onCopyLink={vi.fn()}
+        canRedactMessage={() => true}
+        onLoadOlder={vi.fn().mockResolvedValue(undefined)}
+        isLoadingHistory={false}
+        canLoadMoreHistory={false}
+        searchQuery=""
+        searchFilter="all"
+        searchResultIds={[]}
+        activeSearchResultId={null}
+        focusMessageId={null}
+        onFocusHandled={vi.fn()}
+        threadSummaryByRootId={{}}
+        unreadCount={0}
+        roomLastReadTs={0}
+        onJumpToLatest={vi.fn()}
+        onOpenMessageLink={onOpenMessageLink}
+      />
+    );
+
+    await user.click(screen.getByRole("link", { name: "Jump" }));
+    expect(onOpenMessageLink).toHaveBeenCalledTimes(1);
+    const href = onOpenMessageLink.mock.calls[0]?.[0];
+    expect(href).toContain("matrix.to/#/%21room%3Aexample.com/%24event1");
+  });
+
+  it("renders system messages without action controls", () => {
+    const messages: Message[] = [
+      {
+        id: "$sys1",
+        roomId: "!room:example.com",
+        authorId: "@ava:example.com",
+        body: "ava joined the room",
+        timestamp: Date.now(),
+        reactions: [],
+        system: true
+      }
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        users={users}
+        meId="@me:example.com"
+        meName="me"
+        messageDensity="cozy"
+        permissionSnapshot={permissionSnapshot}
+        onReact={vi.fn()}
+        onReply={vi.fn()}
+        onQuickReply={vi.fn()}
+        onThread={vi.fn()}
+        onPin={vi.fn()}
+        onRedact={vi.fn()}
+        onCopyLink={vi.fn()}
+        canRedactMessage={() => true}
+        onLoadOlder={vi.fn().mockResolvedValue(undefined)}
+        isLoadingHistory={false}
+        canLoadMoreHistory={false}
+        searchQuery=""
+        searchFilter="all"
+        searchResultIds={[]}
+        activeSearchResultId={null}
+        focusMessageId={null}
+        onFocusHandled={vi.fn()}
+        threadSummaryByRootId={{}}
+        unreadCount={0}
+        roomLastReadTs={0}
+        onJumpToLatest={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("System")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Message actions" })).toBeNull();
   });
 });

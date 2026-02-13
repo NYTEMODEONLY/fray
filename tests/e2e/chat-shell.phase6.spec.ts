@@ -46,7 +46,10 @@ test.describe("Phase 6 critical chat shell flows", () => {
     const firstMessage = page.locator("article.message").first();
     const beforeDeleteCount = await page.locator("article.message").count();
     await firstMessage.hover();
-    await firstMessage.getByRole("button", { name: "Message actions" }).click();
+    const overflowActions = firstMessage.getByRole("button", { name: "Message actions" });
+    if ((await overflowActions.count()) > 0) {
+      await overflowActions.click();
+    }
     await firstMessage.getByRole("button", { name: "Delete" }).click();
     await expect.poll(async () => page.locator("article.message").count()).toBeLessThan(beforeDeleteCount);
   });

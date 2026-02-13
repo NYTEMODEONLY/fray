@@ -8,6 +8,7 @@ import {
   GroupCallType,
   IndexedDBStore,
   MatrixEventEvent,
+  MatrixEvent,
   MatrixClient,
   MsgType,
   NotificationCountType,
@@ -47,6 +48,7 @@ const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2,
 const SESSION_KEY = "fray.matrix.session";
 const ROOM_TYPE_EVENT = "com.fray.room_type";
 const PREFERENCES_KEY = "fray.preferences";
+const PENDING_REDACTIONS_KEY = "fray.pending_redactions";
 const SPACE_LAYOUT_EVENT = "com.fray.space_layout";
 const SERVER_SETTINGS_EVENT = "com.fray.server_settings";
 const SERVER_META_EVENT = "com.fray.server_meta";
@@ -54,6 +56,8 @@ const PERMISSION_OVERRIDES_EVENT = "com.fray.permission_overrides";
 const AUDIT_LOG_EVENT = "com.fray.audit_log";
 const DEFAULT_CATEGORY_ID = "channels";
 const DEFAULT_CATEGORY_NAME = "Channels";
+const PENDING_REDACTION_TTL_MS = 24 * 60 * 60 * 1000;
+const PENDING_REDACTION_MAX_ITEMS = 200;
 
 const DEFAULT_SPACE: Space = { id: "all", name: "All Rooms", icon: "M" };
 
@@ -80,6 +84,13 @@ interface MatrixSession {
   userId: string;
   deviceId: string;
   refreshToken?: string;
+}
+
+interface PendingRedactionIntent {
+  roomId: string;
+  transactionId: string;
+  sourceMessageId: string;
+  queuedAt: number;
 }
 
 interface CallState {
@@ -376,6 +387,124 @@ const loadPreferences = (): UserPreferences => {
 const savePreferences = (preferences: UserPreferences) => {
   if (typeof window === "undefined") return;
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+};
+
+const normalizePendingRedactionIntent = (value: unknown): PendingRedactionIntent | null => {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const roomId = typeof raw.roomId === "string" ? raw.roomId.trim() : "";
+  const transactionId = typeof raw.transactionId === "string" ? raw.transactionId.trim() : "";
+  const sourceMessageId = typeof raw.sourceMessageId === "string" ? raw.sourceMessageId.trim() : "";
+  const queuedAt =
+    typeof raw.queuedAt === "number" && Number.isFinite(raw.queuedAt) ? raw.queuedAt : Date.now();
+  if (!roomId || !transactionId || !sourceMessageId) return null;
+  return { roomId, transactionId, sourceMessageId, queuedAt };
+};
+
+const prunePendingRedactionIntents = (intents: PendingRedactionIntent[]) => {
+  const cutoff = Date.now() - PENDING_REDACTION_TTL_MS;
+  const dedupe = new Map<string, PendingRedactionIntent>();
+  intents
+    .filter((intent) => intent.queuedAt >= cutoff)
+    .sort((left, right) => right.queuedAt - left.queuedAt)
+    .forEach((intent) => {
+      const key = `${intent.roomId}::${intent.transactionId}`;
+      if (!dedupe.has(key)) {
+        dedupe.set(key, intent);
+      }
+    });
+  return Array.from(dedupe.values()).slice(0, PENDING_REDACTION_MAX_ITEMS);
+};
+
+const loadPendingRedactionIntents = (): PendingRedactionIntent[] => {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(PENDING_REDACTIONS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const normalized = parsed
+      .map((item) => normalizePendingRedactionIntent(item))
+      .filter((item): item is PendingRedactionIntent => Boolean(item));
+    const pruned = prunePendingRedactionIntents(normalized);
+    if (pruned.length !== normalized.length) {
+      localStorage.setItem(PENDING_REDACTIONS_KEY, JSON.stringify(pruned));
+    }
+    return pruned;
+  } catch {
+    return [];
+  }
+};
+
+const savePendingRedactionIntents = (intents: PendingRedactionIntent[]) => {
+  if (typeof window === "undefined") return;
+  const pruned = prunePendingRedactionIntents(intents);
+  if (!pruned.length) {
+    localStorage.removeItem(PENDING_REDACTIONS_KEY);
+    return;
+  }
+  localStorage.setItem(PENDING_REDACTIONS_KEY, JSON.stringify(pruned));
+};
+
+const queuePendingRedactionIntent = (intent: PendingRedactionIntent) => {
+  const existing = loadPendingRedactionIntents().filter(
+    (entry) => !(entry.roomId === intent.roomId && entry.transactionId === intent.transactionId)
+  );
+  savePendingRedactionIntents([intent, ...existing]);
+};
+
+const removePendingRedactionIntent = (roomId: string, transactionId: string) => {
+  const existing = loadPendingRedactionIntents().filter(
+    (entry) => !(entry.roomId === roomId && entry.transactionId === transactionId)
+  );
+  savePendingRedactionIntents(existing);
+};
+
+const getPendingRedactionIntentsForRoom = (roomId: string) =>
+  loadPendingRedactionIntents().filter((entry) => entry.roomId === roomId);
+
+const getLocalEchoTransactionId = (roomId: string, messageId: string) => {
+  const localIdPrefix = `~${roomId}:`;
+  if (!messageId.startsWith(localIdPrefix)) return null;
+  const transactionId = messageId.slice(localIdPrefix.length);
+  return transactionId.trim() ? transactionId : null;
+};
+
+const findRemoteEchoEventId = (room: MatrixRoom, transactionId: string) => {
+  const remoteEchoEvent = (room.getLiveTimeline?.().getEvents?.() ?? []).find(
+    (event) => event.getUnsigned()?.transaction_id === transactionId
+  );
+  return remoteEchoEvent?.getId() ?? null;
+};
+
+const pendingRedactionIntentKey = (roomId: string, transactionId: string) =>
+  `${roomId}::${transactionId}`;
+
+const pendingRedactionInFlight = new Set<string>();
+
+const reconcilePendingRedactionsForRoom = ({
+  room,
+  currentRoomId,
+  redactMessage
+}: {
+  room: MatrixRoom;
+  currentRoomId: string;
+  redactMessage: (messageId: string) => Promise<void>;
+}) => {
+  if (room.roomId !== currentRoomId) return;
+  const intents = getPendingRedactionIntentsForRoom(room.roomId);
+  intents.forEach((intent) => {
+    const remoteEchoEventId = findRemoteEchoEventId(room, intent.transactionId);
+    if (!remoteEchoEventId || remoteEchoEventId.startsWith("~")) return;
+    const key = pendingRedactionIntentKey(intent.roomId, intent.transactionId);
+    if (pendingRedactionInFlight.has(key)) return;
+    pendingRedactionInFlight.add(key);
+    void redactMessage(remoteEchoEventId)
+      .finally(() => {
+        removePendingRedactionIntent(intent.roomId, intent.transactionId);
+        pendingRedactionInFlight.delete(key);
+      });
+  });
 };
 
 const getAvatarInitial = (name: string) => name.slice(0, 1).toUpperCase() || "?";
@@ -1410,10 +1539,9 @@ const mapEventsToMessages = (client: MatrixClient, room: MatrixRoom): Message[] 
   const pinnedEvent = room.currentState.getStateEvents(EventType.RoomPinnedEvents, "");
   const pinnedIds = new Set<string>(pinnedEvent?.getContent()?.pinned ?? []);
 
-  return timelineEvents
-    .filter((event) => event.getType() === "m.room.message")
-    .filter((event) => !event.isRedacted())
-    .map((event) => {
+  return timelineEvents.flatMap((event): Message[] => {
+    if (event.getType() === EventType.RoomMessage) {
+      if (event.isRedacted()) return [];
       const content = event.getContent() ?? {};
       const relates = content["m.relates_to"] ?? {};
       const replyToId = relates?.["m.in_reply_to"]?.event_id ?? undefined;
@@ -1442,19 +1570,145 @@ const mapEventsToMessages = (client: MatrixClient, room: MatrixRoom): Message[] 
         userIds
       }));
 
-      return {
-        id: event.getId() ?? uid("m"),
-        roomId: room.roomId,
-        authorId: event.getSender() ?? "",
-        body: content.body ?? "",
-        timestamp: event.getTs(),
-        reactions,
-        attachments: attachments.length ? attachments : undefined,
-        replyToId,
-        threadRootId,
-        pinned: pinnedIds.has(event.getId() ?? "")
-      };
+      return [
+        {
+          id: event.getId() ?? uid("m"),
+          roomId: room.roomId,
+          authorId: event.getSender() ?? "",
+          body: content.body ?? "",
+          timestamp: event.getTs(),
+          reactions,
+          attachments: attachments.length ? attachments : undefined,
+          replyToId,
+          threadRootId,
+          pinned: pinnedIds.has(event.getId() ?? "")
+        }
+      ];
+    }
+
+    if (event.getType() === EventType.RoomMember) {
+      const content = event.getContent() ?? {};
+      const membership = typeof content.membership === "string" ? content.membership : "";
+      const previousContent =
+        typeof event.getPrevContent === "function"
+          ? event.getPrevContent() ?? {}
+          : ((event.event as { unsigned?: { prev_content?: Record<string, unknown> } } | undefined)?.unsigned
+              ?.prev_content ?? {});
+      const previousMembership =
+        typeof (previousContent as Record<string, unknown>).membership === "string"
+          ? ((previousContent as Record<string, unknown>).membership as string)
+          : "";
+      if (!membership || membership === previousMembership) return [];
+
+      const targetUserId = event.getStateKey() ?? event.getSender() ?? "";
+      const targetDisplayName =
+        typeof content.displayname === "string" && content.displayname.trim()
+          ? content.displayname
+          : targetUserId;
+      const senderUserId = event.getSender() ?? targetUserId;
+
+      let body = "";
+      if (membership === "join") {
+        body = previousMembership === "invite" ? `${targetDisplayName} joined from invite` : `${targetDisplayName} joined the room`;
+      } else if (membership === "leave") {
+        body = previousMembership === "join" ? `${targetDisplayName} left the room` : `${targetDisplayName} left`;
+      } else if (membership === "invite") {
+        body = `${senderUserId} invited ${targetDisplayName}`;
+      } else if (membership === "ban") {
+        body = `${targetDisplayName} was banned`;
+      } else if (membership === "knock") {
+        body = `${targetDisplayName} requested to join`;
+      }
+
+      if (!body) return [];
+      return [
+        {
+          id: event.getId() ?? uid("sys"),
+          roomId: room.roomId,
+          authorId: targetUserId || senderUserId,
+          body,
+          timestamp: event.getTs(),
+          reactions: [],
+          system: true
+        }
+      ];
+    }
+
+    return [];
+  });
+};
+
+const filterMessagesByIds = (messages: Message[], removeIds: string[]) => {
+  if (!removeIds.length) return messages;
+  const blocked = new Set(removeIds.filter((id) => Boolean(id)));
+  if (!blocked.size) return messages;
+  return messages.filter((message) => !blocked.has(message.id));
+};
+
+const mergeMessagesById = (existingMessages: Message[], timelineMessages: Message[]) => {
+  const merged = new Map<string, Message>();
+  existingMessages.forEach((message) => {
+    merged.set(message.id, message);
+  });
+  timelineMessages.forEach((message) => {
+    merged.set(message.id, message);
+  });
+  return Array.from(merged.values()).sort((left, right) => {
+    if (left.timestamp !== right.timestamp) {
+      return left.timestamp - right.timestamp;
+    }
+    return left.id.localeCompare(right.id);
+  });
+};
+
+const resolveTimelineMessages = ({
+  existingMessages,
+  timelineMessages,
+  removeMessageIds = []
+}: {
+  existingMessages: Message[];
+  timelineMessages: Message[];
+  removeMessageIds?: string[];
+}) => {
+  return filterMessagesByIds(mergeMessagesById(existingMessages, timelineMessages), removeMessageIds);
+};
+
+const getRedactionTargetEventId = (event: MatrixEvent) => {
+  const raw = event.event as { redacts?: string; content?: { redacts?: string } } | undefined;
+  if (typeof raw?.redacts === "string" && raw.redacts.trim()) {
+    return raw.redacts;
+  }
+  const contentValue = event.getContent()?.redacts;
+  if (typeof contentValue === "string" && contentValue.trim()) {
+    return contentValue;
+  }
+  return "";
+};
+
+const loadRoomMessagesWithBackfill = async (
+  client: MatrixClient,
+  room: MatrixRoom,
+  maxPages: number = 4
+) => {
+  let messages = mapEventsToMessages(client, room);
+  const paginate =
+    typeof (client as unknown as { paginateEventTimeline?: unknown }).paginateEventTimeline === "function"
+      ? client.paginateEventTimeline.bind(client)
+      : null;
+  if (!paginate) {
+    return { messages, hasMore: false };
+  }
+  let hasMore = true;
+  let pagesLoaded = 0;
+  while (messages.length === 0 && hasMore && pagesLoaded < maxPages) {
+    pagesLoaded += 1;
+    hasMore = await paginate(room.getLiveTimeline(), {
+      backwards: true,
+      limit: 40
     });
+    messages = mapEventsToMessages(client, room);
+  }
+  return { messages, hasMore };
 };
 
 const mapMockMessagesByRoomId = (rooms: Room[], allMessages: Message[]) =>
@@ -1629,12 +1883,35 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       });
 
-      client.on(RoomEvent.Timeline, (_event, room) => {
+      client.on(RoomEvent.Timeline, (event, room) => {
         if (!room) return;
         if (room.roomId !== get().currentRoomId) return;
-        const messages = mapEventsToMessages(client, room);
+        reconcilePendingRedactionsForRoom({
+          room,
+          currentRoomId: get().currentRoomId,
+          redactMessage: get().redactMessage
+        });
+        const eventType = event.getType();
+        if (
+          eventType !== EventType.RoomMessage &&
+          eventType !== EventType.Reaction &&
+          eventType !== EventType.RoomRedaction &&
+          eventType !== EventType.RoomPinnedEvents
+        ) {
+          return;
+        }
+        const redactedEventId =
+          eventType === EventType.RoomRedaction ? getRedactionTargetEventId(event) : "";
+        const timelineMessages = mapEventsToMessages(client, room);
         set((state) => ({
-          messagesByRoomId: { ...state.messagesByRoomId, [room.roomId]: messages }
+          messagesByRoomId: {
+            ...state.messagesByRoomId,
+            [room.roomId]: resolveTimelineMessages({
+              existingMessages: state.messagesByRoomId[room.roomId] ?? [],
+              timelineMessages,
+              removeMessageIds: redactedEventId ? [redactedEventId] : []
+            })
+          }
         }));
       });
 
@@ -1953,7 +2230,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const room = client.getRoom(roomId);
     if (!room) return;
 
-    const messages = mapEventsToMessages(client, room);
+    const timelineMessages = mapEventsToMessages(client, room);
     const members = mapMembers(client, room);
     const meMember = members.find((member) => member.id === client.getUserId());
 
@@ -1985,19 +2262,70 @@ export const useAppStore = create<AppState>((set, get) => ({
       replyToId: null,
       threadRootId: null,
       showThread: false,
-      messagesByRoomId: { ...state.messagesByRoomId, [roomId]: messages },
+      messagesByRoomId: {
+        ...state.messagesByRoomId,
+        [roomId]: resolveTimelineMessages({
+          existingMessages: state.messagesByRoomId[roomId] ?? [],
+          timelineMessages
+        })
+      },
       historyHasMoreByRoomId: {
         ...state.historyHasMoreByRoomId,
         [roomId]: true
       },
       roomLastReadTsByRoomId: {
         ...state.roomLastReadTsByRoomId,
-        [roomId]: getLatestMessageTimestamp(messages)
+        [roomId]: getLatestMessageTimestamp(
+          resolveTimelineMessages({
+            existingMessages: state.messagesByRoomId[roomId] ?? [],
+            timelineMessages
+          })
+        )
       },
       rooms: state.rooms.map((roomItem) =>
         roomItem.id === roomId ? { ...roomItem, unreadCount: 0 } : roomItem
       )
     }));
+    reconcilePendingRedactionsForRoom({
+      room,
+      currentRoomId: roomId,
+      redactMessage: get().redactMessage
+    });
+
+    if (timelineMessages.length === 0) {
+      void (async () => {
+        try {
+          const { messages, hasMore } = await loadRoomMessagesWithBackfill(client, room);
+          if (messages.length === 0) return;
+          set((state) => {
+            if (state.currentRoomId !== roomId) {
+              return {};
+            }
+            return {
+              messagesByRoomId: {
+                ...state.messagesByRoomId,
+                [roomId]: messages
+              },
+              historyHasMoreByRoomId: {
+                ...state.historyHasMoreByRoomId,
+                [roomId]: hasMore
+              },
+              roomLastReadTsByRoomId: {
+                ...state.roomLastReadTsByRoomId,
+                [roomId]: getLatestMessageTimestamp(messages)
+              }
+            };
+          });
+          reconcilePendingRedactionsForRoom({
+            room,
+            currentRoomId: get().currentRoomId,
+            redactMessage: get().redactMessage
+          });
+        } catch (error) {
+          console.warn("Failed to backfill room messages after empty timeline load", error);
+        }
+      })();
+    }
   },
   toggleMembers: () => set((state) => ({ showMembers: !state.showMembers })),
   toggleThread: (rootId) =>
@@ -3482,7 +3810,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!room) return;
 
     const commitMatrixDelete = async (targetEventId: string, sourceEventId: string = targetEventId) => {
-      const messages = mapEventsToMessages(client, room);
+      const timelineMessages = mapEventsToMessages(client, room);
       const auditEntry = createAuditEntry(targetEventId, sourceEventId);
       const nextAudit = [auditEntry, ...(get().moderationAuditBySpaceId[spaceId] ?? [])].slice(0, 250);
       await client
@@ -3490,7 +3818,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         .catch(() => undefined);
 
       set((state) => ({
-        messagesByRoomId: { ...state.messagesByRoomId, [room.roomId]: messages },
+        messagesByRoomId: {
+          ...state.messagesByRoomId,
+          [room.roomId]: resolveTimelineMessages({
+            existingMessages: state.messagesByRoomId[room.roomId] ?? [],
+            timelineMessages,
+            removeMessageIds: [targetEventId, sourceEventId]
+          })
+        },
         moderationAuditBySpaceId: {
           ...state.moderationAuditBySpaceId,
           [spaceId]: nextAudit
@@ -3511,6 +3846,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (messageId.startsWith("~")) {
       const localEvent = typeof room.findEventById === "function" ? room.findEventById(messageId) : undefined;
       const localStatus = localEvent?.status ?? null;
+      const transactionId = getLocalEchoTransactionId(room.roomId, messageId);
 
       if (
         localEvent &&
@@ -3521,23 +3857,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
           client.cancelPendingEvent(localEvent);
           await commitMatrixDelete(messageId);
+          if (transactionId) {
+            removePendingRedactionIntent(room.roomId, transactionId);
+          }
           return;
         } catch (error) {
           console.warn("Failed to cancel pending event before delete, retrying via remote echo path", error);
         }
       }
 
-      const localIdPrefix = `~${room.roomId}:`;
-      const transactionId = messageId.startsWith(localIdPrefix) ? messageId.slice(localIdPrefix.length) : null;
       if (transactionId) {
-        const remoteEchoEvent = (room.getLiveTimeline?.().getEvents?.() ?? []).find(
-          (event) => event.getUnsigned()?.transaction_id === transactionId
-        );
-        const remoteEchoEventId = remoteEchoEvent?.getId();
+        const remoteEchoEventId = findRemoteEchoEventId(room, transactionId);
         if (remoteEchoEventId && !remoteEchoEventId.startsWith("~")) {
           try {
             await redactServerEvent(remoteEchoEventId, messageId);
+            removePendingRedactionIntent(room.roomId, transactionId);
           } catch (error) {
+            queuePendingRedactionIntent({
+              roomId: room.roomId,
+              transactionId,
+              sourceMessageId: messageId,
+              queuedAt: Date.now()
+            });
             get().pushNotification("Unable to delete message", (error as Error).message);
           }
           return;
@@ -3545,17 +3886,42 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       if (localEvent) {
+        if (transactionId) {
+          queuePendingRedactionIntent({
+            roomId: room.roomId,
+            transactionId,
+            sourceMessageId: messageId,
+            queuedAt: Date.now()
+          });
+        }
         localEvent.once(MatrixEventEvent.LocalEventIdReplaced, (event) => {
           const remoteEventId = event.getId();
           if (!remoteEventId || remoteEventId.startsWith("~")) return;
           void redactServerEvent(remoteEventId, messageId).catch((error) => {
             get().pushNotification("Unable to delete message", (error as Error).message);
+          }).finally(() => {
+            if (transactionId) {
+              removePendingRedactionIntent(room.roomId, transactionId);
+            }
           });
         });
         get().pushNotification("Delete queued", "Message is still sending and will be deleted after sync.");
         return;
       }
 
+      if (transactionId) {
+        queuePendingRedactionIntent({
+          roomId: room.roomId,
+          transactionId,
+          sourceMessageId: messageId,
+          queuedAt: Date.now()
+        });
+        get().pushNotification(
+          "Delete queued",
+          "Message is still syncing and will be deleted after the server echo arrives."
+        );
+        return;
+      }
       get().pushNotification("Unable to delete message", "Message is still syncing. Try again in a moment.");
       return;
     }

@@ -471,6 +471,59 @@ const App = () => {
     markRoomRead(currentRoomId);
   };
 
+  const parseMatrixToMessageLink = (href: string) => {
+    try {
+      const url = new URL(href);
+      if (url.hostname !== "matrix.to") return null;
+      const hash = url.hash.startsWith("#/") ? url.hash.slice(2) : url.hash.startsWith("#") ? url.hash.slice(1) : "";
+      const segments = hash
+        .split("/")
+        .filter(Boolean)
+        .map((segment) => decodeURIComponent(segment));
+      const target = segments[0];
+      const eventId = segments[1];
+      if (!target || !eventId) return null;
+      return { target, eventId };
+    } catch {
+      return null;
+    }
+  };
+
+  const resolveRoomIdFromMatrixTarget = (target: string) => {
+    if (target.startsWith("!")) return target;
+    if (!matrixClient || !target.startsWith("#")) return null;
+    const matchedRoom = matrixClient.getRooms().find((room) => {
+      const canonicalAlias = room.getCanonicalAlias?.() ?? "";
+      const altAliases = typeof room.getAltAliases === "function" ? room.getAltAliases() ?? [] : [];
+      return canonicalAlias === target || altAliases.includes(target);
+    });
+    return matchedRoom?.roomId ?? null;
+  };
+
+  const handleOpenMessageLink = (href: string) => {
+    const parsed = parseMatrixToMessageLink(href);
+    if (!parsed) return false;
+    const targetRoomId = resolveRoomIdFromMatrixTarget(parsed.target);
+    if (!targetRoomId) return false;
+
+    if (targetRoomId !== currentRoomId) {
+      const roomInCurrentSpace = rooms.find((room) => room.id === targetRoomId);
+      if (!roomInCurrentSpace) {
+        pushNotification(
+          "Message link",
+          "Open the target server/channel first, then use the link again to jump to this message."
+        );
+        return true;
+      }
+      selectRoom(targetRoomId);
+      window.setTimeout(() => setFocusMessageId(parsed.eventId), 0);
+      return true;
+    }
+
+    setFocusMessageId(parsed.eventId);
+    return true;
+  };
+
   const handleReply = (messageId: string) => {
     startReply(messageId);
   };
@@ -608,6 +661,7 @@ const App = () => {
         isOnline={isOnline}
         onToggleOnline={() => setOnline(!isOnline)}
         onCreateRoom={createRoom}
+        onCreateCategory={createCategory}
         onInvite={handleInvite}
         onOpenSpaceSettings={handleSpaceSettings}
         spaceSettingsEnabled={canOpenSpaceSettings}
@@ -681,6 +735,7 @@ const App = () => {
                   unreadCount={currentRoom?.unreadCount ?? 0}
                   roomLastReadTs={roomLastReadTs}
                   onJumpToLatest={handleJumpToLatest}
+                  onOpenMessageLink={handleOpenMessageLink}
                   onLoadOlder={paginateCurrentRoomHistory}
                   isLoadingHistory={historyLoading}
                   canLoadMoreHistory={historyHasMore}
@@ -702,7 +757,15 @@ const App = () => {
 
           <div className="right-stack">
             {showPins && (
-              <PinnedPanel pinned={pinnedMessages} users={users} onClose={togglePins} />
+              <PinnedPanel
+                pinned={pinnedMessages}
+                users={users}
+                onJump={(messageId) => {
+                  setFocusMessageId(messageId);
+                  togglePins();
+                }}
+                onClose={togglePins}
+              />
             )}
             {showThread && (
               <ThreadPanel

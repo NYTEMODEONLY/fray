@@ -5,10 +5,11 @@ import { X } from "lucide-react";
 interface PinnedPanelProps {
   pinned: Message[];
   users: User[];
+  onJump: (messageId: string) => void;
   onClose: () => void;
 }
 
-export const PinnedPanel = ({ pinned, users, onClose }: PinnedPanelProps) => {
+export const PinnedPanel = ({ pinned, users, onJump, onClose }: PinnedPanelProps) => {
   const userMap = new Map(users.map((user) => [user.id, user]));
 
   return (
@@ -31,6 +32,7 @@ export const PinnedPanel = ({ pinned, users, onClose }: PinnedPanelProps) => {
               className="message-text"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(message.body) }}
             />
+            <button className="pill" onClick={() => onJump(message.id)}>Jump</button>
           </div>
         ))}
       </div>

@@ -37,6 +37,7 @@ export interface Message {
   replyToId?: string;
   threadRootId?: string;
   pinned?: boolean;
+  system?: boolean;
   status?: "sent" | "queued";
 }
 

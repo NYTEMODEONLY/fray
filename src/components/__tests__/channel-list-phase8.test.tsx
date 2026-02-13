@@ -60,6 +60,7 @@ describe("Phase 8 channel list interactions", () => {
         isOnline={true}
         onToggleOnline={vi.fn()}
         onCreateRoom={vi.fn()}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
         onInvite={vi.fn()}
         onOpenSpaceSettings={vi.fn()}
         spaceSettingsEnabled={true}
@@ -109,6 +110,7 @@ describe("Phase 8 channel list interactions", () => {
         isOnline={true}
         onToggleOnline={vi.fn()}
         onCreateRoom={vi.fn()}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
         onInvite={vi.fn()}
         onOpenSpaceSettings={vi.fn()}
         spaceSettingsEnabled={true}
@@ -157,6 +159,7 @@ describe("Phase 8 channel list interactions", () => {
         isOnline={true}
         onToggleOnline={vi.fn()}
         onCreateRoom={vi.fn()}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
         onInvite={vi.fn()}
         onOpenSpaceSettings={vi.fn()}
         spaceSettingsEnabled={true}
@@ -176,5 +179,102 @@ describe("Phase 8 channel list interactions", () => {
     const dialog = screen.getByRole("dialog", { name: "Delete confirmation" });
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(onDeleteRoom).not.toHaveBeenCalled();
+  });
+
+  it("creates video channels and categories from the panel", async () => {
+    const user = userEvent.setup();
+    const onCreateRoom = vi.fn();
+    const onCreateCategory = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ChannelList
+        me={me}
+        rooms={rooms}
+        categories={categories}
+        currentRoomId="r_general"
+        canManageChannels={true}
+        canDeleteChannels={true}
+        onSelect={vi.fn()}
+        spaceName="Fray HQ"
+        isOnline={true}
+        onToggleOnline={vi.fn()}
+        onCreateRoom={onCreateRoom}
+        onCreateCategory={onCreateCategory}
+        onInvite={vi.fn()}
+        onOpenSpaceSettings={vi.fn()}
+        spaceSettingsEnabled={true}
+        onOpenUserSettings={vi.fn()}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "New Channel" }));
+    await user.type(screen.getByPlaceholderText("channel-name"), "war-room");
+    await user.selectOptions(screen.getByLabelText("Type"), "video");
+    await user.selectOptions(screen.getByLabelText("Category"), "voice");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    expect(onCreateRoom).toHaveBeenCalledWith({
+      name: "war-room",
+      type: "video",
+      category: "voice"
+    });
+
+    await user.click(screen.getByRole("button", { name: "New Channel" }));
+    await user.type(screen.getByPlaceholderText("new-category"), "Ops");
+    await user.click(screen.getByRole("button", { name: "Add Category" }));
+    expect(onCreateCategory).toHaveBeenCalledWith("Ops");
+  });
+
+  it("supports dragging channels back to the default Channels category", () => {
+    const onMoveRoomToCategory = vi.fn().mockResolvedValue(undefined);
+    const categoriesWithDefault: Category[] = [
+      { id: "channels", name: "Channels", order: 0 },
+      ...categories
+    ];
+
+    render(
+      <ChannelList
+        me={me}
+        rooms={rooms}
+        categories={categoriesWithDefault}
+        currentRoomId="r_general"
+        canManageChannels={true}
+        canDeleteChannels={true}
+        onSelect={vi.fn()}
+        spaceName="Fray HQ"
+        isOnline={true}
+        onToggleOnline={vi.fn()}
+        onCreateRoom={vi.fn()}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
+        onInvite={vi.fn()}
+        onOpenSpaceSettings={vi.fn()}
+        spaceSettingsEnabled={true}
+        onOpenUserSettings={vi.fn()}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={onMoveRoomToCategory}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const transfer = createDataTransfer();
+    const roomGeneral = screen.getByRole("button", { name: "general" });
+    const categoryChannels = screen.getByRole("button", { name: "Channels" });
+
+    fireEvent.dragStart(roomGeneral, { dataTransfer: transfer });
+    fireEvent.dragOver(categoryChannels, { dataTransfer: transfer });
+    fireEvent.drop(categoryChannels, { dataTransfer: transfer });
+
+    expect(onMoveRoomToCategory).toHaveBeenCalledWith("r_general", "channels");
   });
 });

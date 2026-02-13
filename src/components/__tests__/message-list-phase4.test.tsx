@@ -183,4 +183,62 @@ describe("Phase 4 message list UX", () => {
     const targetMessage = screen.getByText("searchable payload").closest("article");
     expect(targetMessage).toHaveClass("search-active");
   });
+
+  it("shows reply preview with author and snippet when target message is loaded", () => {
+    const replyMessages: Message[] = [
+      {
+        id: "$root",
+        roomId: "!room:example.com",
+        authorId: "@ava:example.com",
+        body: "Original discussion point that should appear in reply preview.",
+        timestamp: new Date("2026-02-10T10:00:00.000Z").getTime(),
+        reactions: []
+      },
+      {
+        id: "$reply",
+        roomId: "!room:example.com",
+        authorId: "@me:example.com",
+        body: "Following up",
+        timestamp: new Date("2026-02-10T10:01:00.000Z").getTime(),
+        reactions: [],
+        replyToId: "$root"
+      }
+    ];
+
+    render(
+      <MessageList
+        messages={replyMessages}
+        users={users}
+        meId="@me:example.com"
+        meName="me"
+        messageDensity="cozy"
+        permissionSnapshot={permissionSnapshot}
+        onReact={vi.fn()}
+        onReply={vi.fn()}
+        onQuickReply={vi.fn()}
+        onThread={vi.fn()}
+        onPin={vi.fn()}
+        onRedact={vi.fn()}
+        onCopyLink={vi.fn()}
+        canRedactMessage={() => false}
+        onLoadOlder={vi.fn().mockResolvedValue(undefined)}
+        isLoadingHistory={false}
+        canLoadMoreHistory={false}
+        searchQuery=""
+        searchFilter="all"
+        searchResultIds={[]}
+        activeSearchResultId={null}
+        focusMessageId={null}
+        onFocusHandled={vi.fn()}
+        threadSummaryByRootId={{}}
+        unreadCount={0}
+        roomLastReadTs={0}
+        onJumpToLatest={vi.fn()}
+      />
+    );
+
+    const replyPreview = screen.getByText(/Replying to ava:/i);
+    expect(replyPreview).toBeInTheDocument();
+    expect(replyPreview).toHaveTextContent(/Original discussion point/i);
+  });
 });
