@@ -9,6 +9,23 @@ test-results/
 .env
 .env.*
 !.env.example
+.envrc
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+*.kdbx
+secrets/
+credentials/
+*.secret
+*.secrets
 
 src-tauri/target/
 src-tauri/gen/

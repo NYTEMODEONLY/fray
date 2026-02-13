@@ -58,6 +58,7 @@ npm run test
 npm run test:coverage
 npm run build
 npm run test:e2e
+npm run security:scan
 ```
 
 Coverage thresholds are configured in `vitest.config.ts` for critical store/service logic.
@@ -129,6 +130,7 @@ Fray does not ship a central backend. You host a Matrix homeserver and connect F
 - Desktop update setup: [docs/desktop-updates.md](docs/desktop-updates.md)
 - Overhaul architecture notes: [docs/discord-familiar-overhaul-architecture.md](docs/discord-familiar-overhaul-architecture.md)
 - Matrix/Synapse parity roadmap: [docs/matrix-synapse-parity-roadmap.md](docs/matrix-synapse-parity-roadmap.md)
+- Security commit cadence: [docs/security-commit-cadence.md](docs/security-commit-cadence.md)
 - Rollout gates/checklist: [docs/phase6-rollout-checklist.md](docs/phase6-rollout-checklist.md)
 
 ---
@@ -141,6 +143,8 @@ npm run test:watch
 npm run test:coverage
 npm run test:e2e
 npm run test:e2e:headed
+npm run security:scan
+npm run security:scan:staged
 npm run metrics:report
 npm run dev
 npm run tauri:dev
