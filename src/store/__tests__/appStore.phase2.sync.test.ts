@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { EventType } from "matrix-js-sdk";
+import { EventType } from "../../matrix/client";
 import { ServerSettings } from "../../types";
 import { useAppStore } from "../appStore";
 

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EventType } from "matrix-js-sdk";
 import { AuthScreen } from "./components/AuthScreen";
 import { CallDock } from "./components/CallDock";
 import { ChannelList } from "./components/ChannelList";
@@ -33,6 +32,7 @@ import {
   canRedactMessage,
   parsePowerLevels
 } from "./services/permissionService";
+import { getRoomPowerLevelContent } from "./matrix/permissions";
 import { useAppStore } from "./store/appStore";
 import { notify } from "./platform/notifications";
 import type { NotificationActionId } from "./types";
@@ -305,9 +305,7 @@ const App = () => {
   const currentMatrixRoom = matrixClient?.getRoom(currentRoomId);
 
   const permissionSnapshot = useMemo(() => {
-    const powerLevelContent = currentMatrixRoom
-      ?.currentState.getStateEvents(EventType.RoomPowerLevels, "")
-      ?.getContent();
+    const powerLevelContent = getRoomPowerLevelContent(currentMatrixRoom);
     const parsed = parsePowerLevels(powerLevelContent);
     const powerLevels = isLocalMode
       ? {
@@ -337,9 +335,7 @@ const App = () => {
 
   const canManageChannels = permissionSnapshot.actions.manageChannels;
   const canDeleteChannels = useMemo(() => {
-    const powerLevelContent = currentMatrixRoom
-      ?.currentState.getStateEvents(EventType.RoomPowerLevels, "")
-      ?.getContent();
+    const powerLevelContent = getRoomPowerLevelContent(currentMatrixRoom);
     const parsed = parsePowerLevels(powerLevelContent);
     const powerLevels = isLocalMode
       ? {

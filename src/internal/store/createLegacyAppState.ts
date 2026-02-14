@@ -1,24 +1,44 @@
 import type { StateCreator } from "zustand";
 import {
   ClientEvent,
-  EventType,
   EventStatus,
   GroupCallEvent,
   GroupCallIntent,
   GroupCallType,
-  IndexedDBStore,
   MatrixEventEvent,
-  MatrixEvent,
-  MatrixClient,
   MsgType,
-  NotificationCountType,
   Preset,
   RelationType,
-  Room as MatrixRoom,
   RoomEvent,
-  createClient
-} from "matrix-js-sdk";
-import { CallFeed } from "matrix-js-sdk/lib/webrtc/callFeed";
+  EventType,
+  type CallFeed,
+  type MatrixClient,
+  type MatrixRoom,
+  createSessionMatrixClient,
+  logoutMatrixClient,
+  startMatrixClient,
+  stopMatrixClient
+} from "../../matrix/client";
+import {
+  clearMatrixSession,
+  loadMatrixSession,
+  loginWithPassword,
+  registerWithPassword,
+  saveMatrixSession,
+  type MatrixSession
+} from "../../matrix/session";
+import {
+  buildSpaceIndex,
+  getDirectRoomIds,
+  isRoomDeleted,
+  mapMatrixRoom,
+  mapMembers
+} from "../../matrix/rooms";
+import {
+  getRedactionTargetEventId,
+  loadRoomMessagesWithBackfill,
+  mapEventsToMessages
+} from "../../matrix/timeline";
 import { invoke } from "@tauri-apps/api/core";
 import {
   messages as mockMessages,
@@ -51,7 +71,6 @@ import { canDeleteChannelsAndCategories, parsePowerLevels } from "../../services
 
 const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 
-const SESSION_KEY = "fray.matrix.session";
 const ROOM_TYPE_EVENT = "com.fray.room_type";
 const PREFERENCES_KEY = "fray.preferences";
 const PENDING_REDACTIONS_KEY = "fray.pending_redactions";
@@ -83,14 +102,6 @@ export type ServerSettingsTab =
   | "invites"
   | "moderation"
   | "health";
-
-interface MatrixSession {
-  baseUrl: string;
-  accessToken: string;
-  userId: string;
-  deviceId: string;
-  refreshToken?: string;
-}
 
 interface PendingRedactionIntent {
   roomId: string;
@@ -357,27 +368,6 @@ const createNotification = (
   action: options?.action
 });
 
-const loadSession = (): MatrixSession | null => {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as MatrixSession;
-  } catch {
-    return null;
-  }
-};
-
-const saveSession = (session: MatrixSession) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-};
-
-const clearSession = () => {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(SESSION_KEY);
-};
-
 const loadPreferences = (): UserPreferences => {
   if (typeof window === "undefined") return defaultUserPreferences;
   const raw = localStorage.getItem(PREFERENCES_KEY);
@@ -543,92 +533,6 @@ const applyProfileToUsers = (
   users.map((user) =>
     user.id === meId ? applyProfileToUser(user, profileDisplayName, profileAvatarDataUrl) : user
   );
-
-const mapMembers = (client: MatrixClient, room: MatrixRoom): User[] =>
-  room.getJoinedMembers().map((member) => {
-    const avatarMxc =
-      typeof member.getMxcAvatarUrl === "function" ? member.getMxcAvatarUrl() : undefined;
-    return {
-      id: member.userId,
-      name: member.name ?? member.userId,
-      avatar: getAvatarInitial(member.name ?? member.userId),
-      avatarUrl: avatarMxc ? client.mxcUrlToHttp(avatarMxc, 80, 80, "crop") ?? undefined : undefined,
-      status: "offline",
-      roles: [member.powerLevel === 100 ? "Admin" : "Member"]
-    };
-  });
-
-const buildSpaceIndex = (client: MatrixClient) => {
-  const rooms = client.getRooms();
-  const spaceRooms = rooms.filter((room) => room.getType() === "m.space");
-  const spaces: Space[] = spaceRooms.length
-    ? spaceRooms.map((room) => ({
-        id: room.roomId,
-        name: room.name || room.roomId,
-        icon: (room.name || "S").slice(0, 1).toUpperCase()
-      }))
-    : [DEFAULT_SPACE];
-
-  const children = new Map<string, Set<string>>();
-  spaceRooms.forEach((space) => {
-    const childEvents = space.currentState.getStateEvents(EventType.SpaceChild) ?? [];
-    childEvents.forEach((event) => {
-      const roomId = event.getStateKey();
-      if (!roomId) return;
-      if (!children.has(space.roomId)) {
-        children.set(space.roomId, new Set());
-      }
-      children.get(space.roomId)!.add(roomId);
-    });
-  });
-
-  return { spaces, children };
-};
-
-const getDirectRoomIds = (client: MatrixClient) => {
-  const directEvent = client.getAccountData(EventType.Direct);
-  const content = directEvent?.getContent() ?? {};
-  const directRoomIds = new Set<string>();
-  Object.values(content).forEach((rooms) => {
-    if (Array.isArray(rooms)) {
-      rooms.forEach((roomId) => directRoomIds.add(roomId));
-    }
-  });
-  return directRoomIds;
-};
-
-const mapMatrixRoom = (
-  client: MatrixClient,
-  room: MatrixRoom,
-  spaceId: string,
-  directRoomIds: Set<string>
-): Room => {
-  const typeEvent = room.currentState.getStateEvents(ROOM_TYPE_EVENT, "");
-  const mappedType = typeEvent?.getContent()?.type as RoomType | undefined;
-  const isDm = directRoomIds.has(room.roomId);
-  const tags = Object.keys(room.tags ?? {});
-  const category = tags[0] ?? DEFAULT_CATEGORY_ID;
-  const type: RoomType = isDm ? "dm" : mappedType ?? "text";
-  const topicEvent = room.currentState.getStateEvents(EventType.RoomTopic, "");
-  const topic = topicEvent?.getContent()?.topic ?? "";
-
-  return {
-    id: room.roomId,
-    spaceId,
-    name: room.name || room.getDefaultRoomName(client.getUserId() ?? "") || room.roomId,
-    type,
-    category,
-    topic,
-    unreadCount: room.getUnreadNotificationCount
-      ? room.getUnreadNotificationCount(NotificationCountType.Total)
-      : 0
-  };
-};
-
-const isRoomDeleted = (room: MatrixRoom) => {
-  const typeEvent = room.currentState.getStateEvents(ROOM_TYPE_EVENT, "");
-  return typeEvent?.getContent()?.deleted === true;
-};
 
 const createDefaultLayout = (): SpaceLayout => ({
   version: 1,
@@ -1527,123 +1431,6 @@ const resolveSpaceStateHostRoomId = (
   return state.rooms[0]?.id ?? null;
 };
 
-const mapEventsToMessages = (client: MatrixClient, room: MatrixRoom): Message[] => {
-  const timelineEvents = room.getLiveTimeline().getEvents();
-  const reactionsByEvent = new Map<string, Map<string, string[]>>();
-
-  timelineEvents.forEach((event) => {
-    if (event.getType() !== "m.reaction") return;
-    const relates = event.getContent()?.["m.relates_to"];
-    if (!relates?.event_id || !relates?.key) return;
-    const bucket = reactionsByEvent.get(relates.event_id) ?? new Map();
-    const users = bucket.get(relates.key) ?? [];
-    users.push(event.getSender() ?? "");
-    bucket.set(relates.key, users);
-    reactionsByEvent.set(relates.event_id, bucket);
-  });
-
-  const pinnedEvent = room.currentState.getStateEvents(EventType.RoomPinnedEvents, "");
-  const pinnedIds = new Set<string>(pinnedEvent?.getContent()?.pinned ?? []);
-
-  return timelineEvents.flatMap((event): Message[] => {
-    if (event.getType() === EventType.RoomMessage) {
-      if (event.isRedacted()) return [];
-      const content = event.getContent() ?? {};
-      const relates = content["m.relates_to"] ?? {};
-      const replyToId = relates?.["m.in_reply_to"]?.event_id ?? undefined;
-      const threadRootId =
-        relates?.rel_type === "m.thread" && typeof relates.event_id === "string"
-          ? relates.event_id
-          : undefined;
-      const attachments: Attachment[] = [];
-
-      if (content.msgtype === "m.image" || content.msgtype === "m.file") {
-        const url = content.url
-          ? client.mxcUrlToHttp(content.url, 320, 320, "scale") ?? undefined
-          : undefined;
-        attachments.push({
-          id: uid("att"),
-          name: content.body ?? "file",
-          type: content.msgtype === "m.image" ? "image" : "file",
-          size: content.info?.size ?? 0,
-          url
-        });
-      }
-
-      const reactionMap = reactionsByEvent.get(event.getId() ?? "") ?? new Map();
-      const reactions = Array.from(reactionMap.entries()).map(([emoji, userIds]) => ({
-        emoji,
-        userIds
-      }));
-
-      return [
-        {
-          id: event.getId() ?? uid("m"),
-          roomId: room.roomId,
-          authorId: event.getSender() ?? "",
-          body: content.body ?? "",
-          timestamp: event.getTs(),
-          reactions,
-          attachments: attachments.length ? attachments : undefined,
-          replyToId,
-          threadRootId,
-          pinned: pinnedIds.has(event.getId() ?? "")
-        }
-      ];
-    }
-
-    if (event.getType() === EventType.RoomMember) {
-      const content = event.getContent() ?? {};
-      const membership = typeof content.membership === "string" ? content.membership : "";
-      const previousContent =
-        typeof event.getPrevContent === "function"
-          ? event.getPrevContent() ?? {}
-          : ((event.event as { unsigned?: { prev_content?: Record<string, unknown> } } | undefined)?.unsigned
-              ?.prev_content ?? {});
-      const previousMembership =
-        typeof (previousContent as Record<string, unknown>).membership === "string"
-          ? ((previousContent as Record<string, unknown>).membership as string)
-          : "";
-      if (!membership || membership === previousMembership) return [];
-
-      const targetUserId = event.getStateKey() ?? event.getSender() ?? "";
-      const targetDisplayName =
-        typeof content.displayname === "string" && content.displayname.trim()
-          ? content.displayname
-          : targetUserId;
-      const senderUserId = event.getSender() ?? targetUserId;
-
-      let body = "";
-      if (membership === "join") {
-        body = previousMembership === "invite" ? `${targetDisplayName} joined from invite` : `${targetDisplayName} joined the room`;
-      } else if (membership === "leave") {
-        body = previousMembership === "join" ? `${targetDisplayName} left the room` : `${targetDisplayName} left`;
-      } else if (membership === "invite") {
-        body = `${senderUserId} invited ${targetDisplayName}`;
-      } else if (membership === "ban") {
-        body = `${targetDisplayName} was banned`;
-      } else if (membership === "knock") {
-        body = `${targetDisplayName} requested to join`;
-      }
-
-      if (!body) return [];
-      return [
-        {
-          id: event.getId() ?? uid("sys"),
-          roomId: room.roomId,
-          authorId: targetUserId || senderUserId,
-          body,
-          timestamp: event.getTs(),
-          reactions: [],
-          system: true
-        }
-      ];
-    }
-
-    return [];
-  });
-};
-
 const filterMessagesByIds = (messages: Message[], removeIds: string[]) => {
   if (!removeIds.length) return messages;
   const blocked = new Set(removeIds.filter((id) => Boolean(id)));
@@ -1677,44 +1464,6 @@ const resolveTimelineMessages = ({
   removeMessageIds?: string[];
 }) => {
   return filterMessagesByIds(mergeMessagesById(existingMessages, timelineMessages), removeMessageIds);
-};
-
-const getRedactionTargetEventId = (event: MatrixEvent) => {
-  const raw = event.event as { redacts?: string; content?: { redacts?: string } } | undefined;
-  if (typeof raw?.redacts === "string" && raw.redacts.trim()) {
-    return raw.redacts;
-  }
-  const contentValue = event.getContent()?.redacts;
-  if (typeof contentValue === "string" && contentValue.trim()) {
-    return contentValue;
-  }
-  return "";
-};
-
-const loadRoomMessagesWithBackfill = async (
-  client: MatrixClient,
-  room: MatrixRoom,
-  maxPages: number = 4
-) => {
-  let messages = mapEventsToMessages(client, room);
-  const paginate =
-    typeof (client as unknown as { paginateEventTimeline?: unknown }).paginateEventTimeline === "function"
-      ? client.paginateEventTimeline.bind(client)
-      : null;
-  if (!paginate) {
-    return { messages, hasMore: false };
-  }
-  let hasMore = true;
-  let pagesLoaded = 0;
-  while (messages.length === 0 && hasMore && pagesLoaded < maxPages) {
-    pagesLoaded += 1;
-    hasMore = await paginate(room.getLiveTimeline(), {
-      backwards: true,
-      limit: 40
-    });
-    messages = mapEventsToMessages(client, room);
-  }
-  return { messages, hasMore };
 };
 
 const mapMockMessagesByRoomId = (rooms: Room[], allMessages: Message[]) =>
@@ -1849,40 +1598,13 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
   callState: defaultCallState,
   bootstrapMatrix: async () => {
     if (get().matrixClient) return;
-    const session = loadSession();
+    const session = loadMatrixSession();
     if (!session) return;
 
     set({ matrixStatus: "connecting", matrixSession: session });
 
     try {
-      const store = new IndexedDBStore({ indexedDB: window.indexedDB, dbName: "fray-matrix" });
-      let client = createClient({
-        baseUrl: session.baseUrl,
-        accessToken: session.accessToken,
-        userId: session.userId,
-        deviceId: session.deviceId,
-        store,
-        timelineSupport: true
-      });
-      try {
-        // matrix-js-sdk requires startup after the store is attached to a client instance.
-        await store.startup();
-      } catch (error) {
-        console.warn("IndexedDB store startup failed, retrying without persistent store", error);
-        client = createClient({
-          baseUrl: session.baseUrl,
-          accessToken: session.accessToken,
-          userId: session.userId,
-          deviceId: session.deviceId,
-          timelineSupport: true
-        });
-      }
-
-      try {
-        await client.initRustCrypto();
-      } catch (error) {
-        console.warn("Rust crypto init failed", error);
-      }
+      const client = await createSessionMatrixClient(session);
 
       client.on(ClientEvent.Sync, (state) => {
         set({ matrixStatus: state === "SYNCING" ? "syncing" : "idle" });
@@ -1951,11 +1673,11 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
         get().selectSpace(currentSpaceId);
       });
 
-      client.startClient({ initialSyncLimit: 30 });
+      startMatrixClient(client);
 
       set({ matrixClient: client, matrixStatus: "syncing", matrixError: null });
 
-      const { spaces } = buildSpaceIndex(client);
+      const { spaces } = buildSpaceIndex(client, DEFAULT_SPACE);
       const targetSpaceId = spaces[0]?.id ?? DEFAULT_SPACE.id;
       set({
         spaces,
@@ -1970,20 +1692,9 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
   },
   login: async (baseUrl, username, password) => {
     set({ matrixStatus: "connecting", matrixError: null });
-    const tempClient = createClient({ baseUrl });
     try {
-      const response = await tempClient.login("m.login.password", {
-        user: username,
-        password
-      });
-      const session: MatrixSession = {
-        baseUrl,
-        accessToken: response.access_token,
-        userId: response.user_id,
-        deviceId: response.device_id,
-        refreshToken: response.refresh_token
-      };
-      saveSession(session);
+      const session = await loginWithPassword(baseUrl, username, password);
+      saveMatrixSession(session);
       set({ matrixSession: session });
       await get().bootstrapMatrix();
     } catch (error) {
@@ -1992,19 +1703,9 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
   },
   register: async (baseUrl, username, password) => {
     set({ matrixStatus: "connecting", matrixError: null });
-    const tempClient = createClient({ baseUrl });
     try {
-      const response = await tempClient.register(username, password, null, { type: "m.login.dummy" });
-      if (!response.access_token || !response.user_id || !response.device_id) {
-        throw new Error("Registration did not return credentials");
-      }
-      const session: MatrixSession = {
-        baseUrl,
-        accessToken: response.access_token,
-        userId: response.user_id,
-        deviceId: response.device_id
-      };
-      saveSession(session);
+      const session = await registerWithPassword(baseUrl, username, password);
+      saveMatrixSession(session);
       set({ matrixSession: session });
       await get().bootstrapMatrix();
     } catch (error) {
@@ -2014,10 +1715,10 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
   logout: async () => {
     const client = get().matrixClient;
     if (client) {
-      await client.logout(true).catch(() => undefined);
-      client.stopClient();
+      await logoutMatrixClient(client);
+      stopMatrixClient(client);
     }
-    clearSession();
+    clearMatrixSession();
     set({
       matrixClient: null,
       matrixSession: null,
@@ -2111,7 +1812,7 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
       return;
     }
 
-    const { spaces, children } = buildSpaceIndex(client);
+    const { spaces, children } = buildSpaceIndex(client, DEFAULT_SPACE);
     const directRoomIds = getDirectRoomIds(client);
     const availableSpaces = spaces.length ? spaces : [DEFAULT_SPACE];
     const targetSpace = availableSpaces.find((space) => space.id === spaceId) ?? availableSpaces[0];
