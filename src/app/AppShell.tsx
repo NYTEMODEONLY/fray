@@ -1,5 +1,4 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { CallDock } from "../components/CallDock";
 import { ChannelList } from "../components/ChannelList";
 import { CommandPalette } from "../components/CommandPalette";
 import { MemberList } from "../components/MemberList";
@@ -44,6 +43,11 @@ const LOCAL_MODE_KEY = "fray.local.mode";
 const AdminServerSettingsModal = lazy(() =>
   import("../features/admin/ServerSettingsModal").then((module) => ({
     default: module.ServerSettingsModal
+  }))
+);
+const CallDockPanel = lazy(() =>
+  import("../components/CallDock").then((module) => ({
+    default: module.CallDock
   }))
 );
 
@@ -699,21 +703,23 @@ const AppShell = () => {
               />
             )}
             {callMode && (
-              <CallDock
-                mode={callMode}
-                joined={callState.joined}
-                micMuted={callState.micMuted}
-                videoMuted={callState.videoMuted}
-                screenSharing={callState.screenSharing}
-                localStream={callState.localStream}
-                remoteStreams={callState.remoteStreams}
-                screenStreams={callState.screenshareStreams}
-                onJoin={joinCall}
-                onLeave={leaveCall}
-                onToggleMic={toggleMic}
-                onToggleVideo={toggleVideo}
-                onToggleScreen={toggleScreenShare}
-              />
+              <Suspense fallback={null}>
+                <CallDockPanel
+                  mode={callMode}
+                  joined={callState.joined}
+                  micMuted={callState.micMuted}
+                  videoMuted={callState.videoMuted}
+                  screenSharing={callState.screenSharing}
+                  localStream={callState.localStream}
+                  remoteStreams={callState.remoteStreams}
+                  screenStreams={callState.screenshareStreams}
+                  onJoin={joinCall}
+                  onLeave={leaveCall}
+                  onToggleMic={toggleMic}
+                  onToggleVideo={toggleVideo}
+                  onToggleScreen={toggleScreenShare}
+                />
+              </Suspense>
             )}
           </div>
         </div>
