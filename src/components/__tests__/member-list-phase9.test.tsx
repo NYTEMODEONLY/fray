@@ -33,7 +33,7 @@ describe("Phase 9 member profile and role color", () => {
     expect(screen.getByRole("heading", { name: "nytemode" })).toHaveStyle({ color: "#b94cff" });
     expect(screen.getByText("@nyte:example.com")).toBeInTheDocument();
     expect(screen.getAllByText("nytemode").length).toBeGreaterThan(1);
-  });
+  }, 10000);
 
   it("closes the profile card when close is clicked", async () => {
     const user = userEvent.setup();

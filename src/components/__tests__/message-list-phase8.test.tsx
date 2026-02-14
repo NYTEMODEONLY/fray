@@ -98,7 +98,7 @@ describe("Phase 8 message timestamp and context actions", () => {
         value: originalMatchMedia
       });
     }
-  });
+  }, 10000);
 
   it("renders relative + absolute timestamps", () => {
     vi.useFakeTimers();

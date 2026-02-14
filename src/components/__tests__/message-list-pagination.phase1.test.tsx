@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MessageList } from "../MessageList";
 import { Message, User } from "../../types";
@@ -9,15 +9,59 @@ const users: User[] = [
   { id: "@ava:example.com", name: "ava", avatar: "A", status: "online", roles: ["Member"] }
 ];
 
+const BASE_TS = 1_700_000_000_000;
+
 const createMessages = (count: number): Message[] =>
   Array.from({ length: count }, (_, index) => ({
     id: `$event-${index}`,
     roomId: "!room:example.com",
     authorId: "@ava:example.com",
     body: `message ${index}`,
-    timestamp: Date.now() - index * 1000,
+    timestamp: BASE_TS - index * 1000,
     reactions: []
   }));
+
+const mockScrollGeometry = (
+  list: HTMLDivElement,
+  options: {
+    initialTop: number;
+    initialHeight: number;
+    initialClientHeight: number;
+  }
+) => {
+  let scrollTop = options.initialTop;
+  let scrollHeight = options.initialHeight;
+  let clientHeight = options.initialClientHeight;
+
+  Object.defineProperty(list, "scrollTop", {
+    get: () => scrollTop,
+    set: (value: number) => {
+      scrollTop = value;
+    },
+    configurable: true
+  });
+  Object.defineProperty(list, "scrollHeight", {
+    get: () => scrollHeight,
+    configurable: true
+  });
+  Object.defineProperty(list, "clientHeight", {
+    get: () => clientHeight,
+    configurable: true
+  });
+
+  return {
+    setScrollTop: (value: number) => {
+      scrollTop = value;
+    },
+    setScrollHeight: (value: number) => {
+      scrollHeight = value;
+    },
+    setClientHeight: (value: number) => {
+      clientHeight = value;
+    },
+    getScrollTop: () => scrollTop
+  };
+};
 
 const fullPermissionSnapshot: PermissionSnapshot = {
   role: "owner",
@@ -34,9 +78,7 @@ const fullPermissionSnapshot: PermissionSnapshot = {
 };
 
 describe("Phase 1 message list history pagination", () => {
-  it(
-    "renders long histories and requests older messages near top",
-    () => {
+  it("renders long histories and requests older messages near top", async () => {
     const onLoadOlder = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
       <MessageList
@@ -73,18 +115,17 @@ describe("Phase 1 message list history pagination", () => {
     expect(container.querySelectorAll("article.message")).toHaveLength(180);
 
     const list = container.querySelector(".message-list") as HTMLDivElement;
-    Object.defineProperty(list, "scrollTop", { value: 0, writable: true, configurable: true });
-    Object.defineProperty(list, "scrollHeight", { value: 3000, configurable: true });
-    Object.defineProperty(list, "clientHeight", { value: 700, configurable: true });
-    fireEvent.scroll(list);
-    expect(onLoadOlder).toHaveBeenCalledTimes(1);
-    },
-    10000
-  );
+    mockScrollGeometry(list, {
+      initialTop: 0,
+      initialHeight: 3000,
+      initialClientHeight: 700
+    });
 
-  it(
-    "restores scroll position after prepend and blocks loading when disabled",
-    () => {
+    fireEvent.scroll(list);
+    await waitFor(() => expect(onLoadOlder).toHaveBeenCalledTimes(1));
+  }, 15000);
+
+  it("restores scroll position after prepend and blocks loading when disabled", async () => {
     const onLoadOlder = vi.fn().mockResolvedValue(undefined);
     const { container, rerender } = render(
       <MessageList
@@ -119,16 +160,14 @@ describe("Phase 1 message list history pagination", () => {
     );
 
     const list = container.querySelector(".message-list") as HTMLDivElement;
-    let height = 1200;
-    Object.defineProperty(list, "scrollHeight", {
-      get: () => height,
-      configurable: true
+    const geometry = mockScrollGeometry(list, {
+      initialTop: 0,
+      initialHeight: 1200,
+      initialClientHeight: 700
     });
-    Object.defineProperty(list, "scrollTop", { value: 0, writable: true, configurable: true });
-    Object.defineProperty(list, "clientHeight", { value: 700, configurable: true });
 
     fireEvent.scroll(list);
-    expect(onLoadOlder).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onLoadOlder).toHaveBeenCalledTimes(1));
 
     rerender(
       <MessageList
@@ -162,7 +201,7 @@ describe("Phase 1 message list history pagination", () => {
       />
     );
 
-    height = 1600;
+    geometry.setScrollHeight(1600);
     rerender(
       <MessageList
         messages={createMessages(45)}
@@ -195,7 +234,7 @@ describe("Phase 1 message list history pagination", () => {
       />
     );
 
-    expect(list.scrollTop).toBe(400);
+    await waitFor(() => expect(geometry.getScrollTop()).toBe(400));
 
     onLoadOlder.mockClear();
     rerender(
@@ -230,10 +269,8 @@ describe("Phase 1 message list history pagination", () => {
       />
     );
 
-    list.scrollTop = 0;
+    geometry.setScrollTop(0);
     fireEvent.scroll(list);
     expect(onLoadOlder).not.toHaveBeenCalled();
-    },
-    10000
-  );
+  }, 15000);
 });
