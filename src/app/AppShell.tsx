@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { CallDock } from "../components/CallDock";
 import { ChannelList } from "../components/ChannelList";
 import { CommandPalette } from "../components/CommandPalette";
@@ -9,7 +9,6 @@ import { NotificationTray } from "../components/NotificationTray";
 import { OnboardingOverlay } from "../components/OnboardingOverlay";
 import { PinnedPanel } from "../components/PinnedPanel";
 import { RoomHeader } from "../components/RoomHeader";
-import { ServerSettingsModal } from "../components/ServerSettingsModal";
 import { ServerRail } from "../components/ServerRail";
 import { ThreadPanel } from "../components/ThreadPanel";
 import { UnreadFeed } from "../components/UnreadFeed";
@@ -30,6 +29,7 @@ import { getRoomPowerLevelContent } from "../matrix/permissions";
 import { useAppStore } from "../store/appStore";
 import { notify } from "../platform/notifications";
 import type { NotificationActionId } from "../types";
+import { featureFlags } from "../config/featureFlags";
 import { AppRoutes } from "./routes";
 import { useAppKeyboardShortcuts } from "./useAppKeyboardShortcuts";
 import { useNotificationEffects } from "./useNotificationEffects";
@@ -41,6 +41,11 @@ const defaultRoleSettings = {
   defaultLevel: 0
 };
 const LOCAL_MODE_KEY = "fray.local.mode";
+const AdminServerSettingsModal = lazy(() =>
+  import("../features/admin/ServerSettingsModal").then((module) => ({
+    default: module.ServerSettingsModal
+  }))
+);
 
 const toMembership = (value: string | undefined) => {
   if (value === "join" || value === "invite" || value === "leave" || value === "ban" || value === "knock") {
@@ -170,6 +175,7 @@ const AppShell = () => {
   const [forceLocalMode, setForceLocalMode] = useState(loadLocalModePreference);
   const refreshInFlightRef = useRef(false);
   const isLocalMode = forceLocalMode && !matrixClient;
+  const advancedAdminEnabled = featureFlags.enableAdvancedAdmin;
 
   const runRefreshUpdateFlow = () => {
     if (refreshInFlightRef.current) return;
@@ -483,7 +489,7 @@ const AppShell = () => {
     return spaces[0]?.id;
   };
 
-  const canOpenSpaceSettings = Boolean(resolveSettingsSpaceId());
+  const canOpenSpaceSettings = advancedAdminEnabled && Boolean(resolveSettingsSpaceId());
 
   const handleCreateSpace = async () => {
     const name = window.prompt("Create server", "New Fray Server");
@@ -492,6 +498,14 @@ const AppShell = () => {
   };
 
   const handleSpaceSettings = async () => {
+    if (!advancedAdminEnabled) {
+      pushNotification(
+        "Admin settings disabled",
+        "Enable VITE_ENABLE_ADVANCED_ADMIN to access advanced server settings."
+      );
+      return;
+    }
+
     const settingsSpaceId = resolveSettingsSpaceId();
     if (!settingsSpaceId) {
       pushNotification("Server settings unavailable", "No configurable server was found.");
@@ -707,35 +721,37 @@ const AppShell = () => {
 
       {showMembers && <MemberList users={users} />}
 
-      {showServerSettings && currentSpace && (
-        <ServerSettingsModal
-          space={currentSpace}
-          rooms={spaceRooms}
-          categories={currentCategories}
-          matrixBaseUrl={matrixSession?.baseUrl ?? null}
-          canViewInfrastructureHealth={canViewInfrastructureHealth}
-          settings={currentServerSettings}
-          permissionOverrides={currentPermissionOverrides}
-          moderationAudit={currentModerationAudit}
-          canManageChannels={canManageChannels}
-          canDeleteChannels={canDeleteChannels}
-          users={users}
-          activeTab={serverSettingsTab}
-          onTabChange={setServerSettingsTab}
-          onClose={closeServerSettings}
-          onRenameSpace={(name) => renameSpace(currentSpace.id, name)}
-          onSaveSettings={(settings) => saveServerSettings(currentSpace.id, settings)}
-          onSetCategoryPermissionRule={setCategoryPermissionRule}
-          onSetRoomPermissionRule={setRoomPermissionRule}
-          onCreateCategory={createCategory}
-          onRenameCategory={renameCategory}
-          onDeleteCategory={deleteCategory}
-          onMoveCategoryByStep={moveCategoryByStep}
-          onReorderCategory={reorderCategory}
-          onMoveRoomByStep={moveRoomByStep}
-          onMoveRoomToCategory={moveRoomToCategory}
-          onReorderRoom={reorderRoom}
-        />
+      {advancedAdminEnabled && showServerSettings && currentSpace && (
+        <Suspense fallback={null}>
+          <AdminServerSettingsModal
+            space={currentSpace}
+            rooms={spaceRooms}
+            categories={currentCategories}
+            matrixBaseUrl={matrixSession?.baseUrl ?? null}
+            canViewInfrastructureHealth={canViewInfrastructureHealth}
+            settings={currentServerSettings}
+            permissionOverrides={currentPermissionOverrides}
+            moderationAudit={currentModerationAudit}
+            canManageChannels={canManageChannels}
+            canDeleteChannels={canDeleteChannels}
+            users={users}
+            activeTab={serverSettingsTab}
+            onTabChange={setServerSettingsTab}
+            onClose={closeServerSettings}
+            onRenameSpace={(name) => renameSpace(currentSpace.id, name)}
+            onSaveSettings={(settings) => saveServerSettings(currentSpace.id, settings)}
+            onSetCategoryPermissionRule={setCategoryPermissionRule}
+            onSetRoomPermissionRule={setRoomPermissionRule}
+            onCreateCategory={createCategory}
+            onRenameCategory={renameCategory}
+            onDeleteCategory={deleteCategory}
+            onMoveCategoryByStep={moveCategoryByStep}
+            onReorderCategory={reorderCategory}
+            onMoveRoomByStep={moveRoomByStep}
+            onMoveRoomToCategory={moveRoomToCategory}
+            onReorderRoom={reorderRoom}
+          />
+        </Suspense>
       )}
 
       {showUserSettings && (
