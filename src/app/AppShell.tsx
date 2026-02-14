@@ -180,6 +180,7 @@ const AppShell = () => {
   const refreshInFlightRef = useRef(false);
   const isLocalMode = forceLocalMode && !matrixClient;
   const advancedAdminEnabled = featureFlags.enableAdvancedAdmin;
+  const advancedCallsEnabled = featureFlags.enableAdvancedCalls;
 
   const runRefreshUpdateFlow = () => {
     if (refreshInFlightRef.current) return;
@@ -241,13 +242,15 @@ const AppShell = () => {
   const currentPermissionOverrides = permissionOverridesBySpaceId[currentSpaceId];
   const currentModerationAudit = moderationAuditBySpaceId[currentSpaceId] ?? [];
   const currentRoom = rooms.find((room) => room.id === currentRoomId);
-  const callMode = callState.joined
-    ? callState.mode
-    : currentRoom?.type === "voice"
-      ? "voice"
-      : currentRoom?.type === "video"
-        ? "video"
-        : null;
+  const callMode = advancedCallsEnabled
+    ? callState.joined
+      ? callState.mode
+      : currentRoom?.type === "voice"
+        ? "voice"
+        : currentRoom?.type === "video"
+          ? "video"
+          : null
+    : null;
   const currentMatrixRoom = matrixClient?.getRoom(currentRoomId);
 
   const permissionSnapshot = useMemo(() => {
@@ -582,6 +585,7 @@ const AppShell = () => {
         onToggleOnline={() => setOnline(!isOnline)}
         onCreateRoom={createRoom}
         onCreateCategory={createCategory}
+        enableAdvancedCalls={advancedCallsEnabled}
         onInvite={handleInvite}
         onOpenSpaceSettings={handleSpaceSettings}
         spaceSettingsEnabled={canOpenSpaceSettings}

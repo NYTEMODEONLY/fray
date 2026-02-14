@@ -31,6 +31,7 @@ interface ChannelListProps {
   onToggleOnline: () => void;
   onCreateRoom: (payload: { name: string; type: Room["type"]; category?: string }) => void;
   onCreateCategory: (name: string) => Promise<void> | void;
+  enableAdvancedCalls?: boolean;
   onInvite: () => void;
   onOpenSpaceSettings: () => void;
   spaceSettingsEnabled: boolean;
@@ -98,6 +99,7 @@ export const ChannelList = ({
   onToggleOnline,
   onCreateRoom,
   onCreateCategory,
+  enableAdvancedCalls = true,
   onInvite,
   onOpenSpaceSettings,
   spaceSettingsEnabled,
@@ -163,6 +165,13 @@ export const ChannelList = ({
     if (categories.some((category) => category.id === newCategory)) return;
     setNewCategory(categories[0].id);
   }, [categories, newCategory]);
+
+  useEffect(() => {
+    if (enableAdvancedCalls) return;
+    if (newType === "voice" || newType === "video") {
+      setNewType("text");
+    }
+  }, [enableAdvancedCalls, newType]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -482,8 +491,8 @@ export const ChannelList = ({
                 disabled={!canManageChannels}
               >
                 <option value="text">Text</option>
-                <option value="voice">Voice</option>
-                <option value="video">Video</option>
+                {enableAdvancedCalls && <option value="voice">Voice</option>}
+                {enableAdvancedCalls && <option value="video">Video</option>}
               </select>
             </label>
             <label>

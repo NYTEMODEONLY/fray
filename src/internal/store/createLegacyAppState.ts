@@ -39,6 +39,7 @@ import {
   loadRoomMessagesWithBackfill,
   mapEventsToMessages
 } from "../../matrix/timeline";
+import { featureFlags } from "../../config/featureFlags";
 import { invoke } from "@tauri-apps/api/core";
 import {
   messages as mockMessages,
@@ -1507,6 +1508,8 @@ const defaultCallState: CallState = {
   remoteStreams: [],
   screenshareStreams: []
 };
+
+const areAdvancedCallsEnabled = () => featureFlags.enableAdvancedCalls;
 
 const defaultServerSettingsBySpace = mockSpaces.reduce<Record<string, ServerSettings>>((accumulator, space) => {
   accumulator[space.id] = createDefaultServerSettings();
@@ -3702,6 +3705,11 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
     set({ onboardingStep: null });
   },
   joinCall: async () => {
+    if (!areAdvancedCallsEnabled()) {
+      get().pushNotification("Calls disabled", "Enable VITE_ENABLE_ADVANCED_CALLS to use call controls.");
+      return;
+    }
+
     const client = get().matrixClient;
     const roomId = get().currentRoomId;
     if (!client) return;
@@ -3786,6 +3794,7 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
     set({ callState: defaultCallState });
   },
   toggleMic: () => {
+    if (!areAdvancedCallsEnabled()) return;
     const client = get().matrixClient;
     const callState = get().callState;
     if (!client || !callState.roomId) return;
@@ -3794,6 +3803,7 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
     call.setMicrophoneMuted(!callState.micMuted).catch(() => undefined);
   },
   toggleVideo: () => {
+    if (!areAdvancedCallsEnabled()) return;
     const client = get().matrixClient;
     const callState = get().callState;
     if (!client || !callState.roomId) return;
@@ -3802,6 +3812,7 @@ export const createLegacyAppState: AppStateCreator = (set, get) => ({
     call.setLocalVideoMuted(!callState.videoMuted).catch(() => undefined);
   },
   toggleScreenShare: () => {
+    if (!areAdvancedCallsEnabled()) return;
     const client = get().matrixClient;
     const callState = get().callState;
     if (!client || !callState.roomId) return;
