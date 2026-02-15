@@ -6,6 +6,8 @@ const resetCallsState = () => {
   useAppStore.setState((state) => ({
     ...state,
     notifications: [],
+    matrixClient: null,
+    currentSpaceId: "all",
     currentRoomId: "room_voice",
     rooms: [
       {
@@ -67,6 +69,32 @@ describe("Calls feature flag gating", () => {
     expect(createGroupCall).not.toHaveBeenCalled();
     expect(useAppStore.getState().callState.joined).toBe(false);
     expect(useAppStore.getState().notifications[0]?.title).toBe("Calls disabled");
+  });
+
+  it("blocks voice/video room creation when VITE_ENABLE_ADVANCED_CALLS is disabled", async () => {
+    await useAppStore.getState().createRoom({
+      name: "blocked-voice",
+      type: "voice",
+      category: "channels"
+    });
+
+    const blockedRoom = useAppStore.getState().rooms.find((room) => room.name === "blocked-voice");
+    expect(blockedRoom).toBeUndefined();
+    expect(useAppStore.getState().notifications[0]?.title).toBe("Calls disabled");
+  });
+
+  it("allows voice/video room creation when VITE_ENABLE_ADVANCED_CALLS is enabled", async () => {
+    featureFlags.enableAdvancedCalls = true;
+
+    await useAppStore.getState().createRoom({
+      name: "voice-enabled",
+      type: "voice",
+      category: "channels"
+    });
+
+    const voiceRoom = useAppStore.getState().rooms.find((room) => room.name === "voice-enabled");
+    expect(voiceRoom).toBeDefined();
+    expect(voiceRoom?.type).toBe("voice");
   });
 
   it("blocks mic/video/screenshare toggles when VITE_ENABLE_ADVANCED_CALLS is disabled", () => {

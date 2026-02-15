@@ -277,4 +277,51 @@ describe("Phase 8 channel list interactions", () => {
 
     expect(onMoveRoomToCategory).toHaveBeenCalledWith("r_general", "channels");
   });
+
+  it("hides voice/video channel creation options when advanced calls are disabled", async () => {
+    const user = userEvent.setup();
+    const onCreateRoom = vi.fn();
+
+    render(
+      <ChannelList
+        me={me}
+        rooms={rooms}
+        categories={categories}
+        currentRoomId="r_general"
+        canManageChannels={true}
+        canDeleteChannels={true}
+        onSelect={vi.fn()}
+        spaceName="Fray HQ"
+        isOnline={true}
+        onToggleOnline={vi.fn()}
+        onCreateRoom={onCreateRoom}
+        onCreateCategory={vi.fn().mockResolvedValue(undefined)}
+        onInvite={vi.fn()}
+        onOpenSpaceSettings={vi.fn()}
+        spaceSettingsEnabled={true}
+        onOpenUserSettings={vi.fn()}
+        onMoveCategoryByStep={vi.fn().mockResolvedValue(undefined)}
+        onReorderCategory={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomByStep={vi.fn().mockResolvedValue(undefined)}
+        onMoveRoomToCategory={vi.fn().mockResolvedValue(undefined)}
+        onReorderRoom={vi.fn().mockResolvedValue(undefined)}
+        onDeleteCategory={vi.fn().mockResolvedValue(undefined)}
+        onDeleteRoom={vi.fn().mockResolvedValue(undefined)}
+        enableAdvancedCalls={false}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "New Channel" }));
+    const typeSelect = screen.getByLabelText("Type");
+    expect(within(typeSelect).queryByRole("option", { name: "Voice" })).toBeNull();
+    expect(within(typeSelect).queryByRole("option", { name: "Video" })).toBeNull();
+
+    await user.type(screen.getByPlaceholderText("channel-name"), "text-only");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(onCreateRoom).toHaveBeenCalledWith({
+      name: "text-only",
+      type: "text",
+      category: "community"
+    });
+  });
 });
