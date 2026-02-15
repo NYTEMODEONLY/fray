@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { CallFeed } from "matrix-js-sdk/lib/webrtc/callFeed";
+import type { CallFeed } from "../matrix/client";
 import { Mic, MicOff, PhoneCall, PhoneOff, ScreenShare, ScreenShareOff, Video, VideoOff } from "lucide-react";
 
 interface CallDockProps {

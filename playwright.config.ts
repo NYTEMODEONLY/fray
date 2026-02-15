@@ -1,4 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { loadEnv } from "vite";
+
+const viteEnv = loadEnv("development", process.cwd(), "VITE_");
+for (const [key, value] of Object.entries(viteEnv)) {
+  if (typeof process.env[key] === "undefined") {
+    process.env[key] = value;
+  }
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",

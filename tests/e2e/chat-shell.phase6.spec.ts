@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const isAdvancedAdminEnabled = () => process.env.VITE_ENABLE_ADVANCED_ADMIN === "true";
+
 const dismissOnboarding = async (page: Page) => {
   const onboarding = page.locator(".onboarding-card");
   if (!(await onboarding.isVisible().catch(() => false))) return;
@@ -74,5 +76,35 @@ test.describe("Phase 6 critical chat shell flows", () => {
     await page.keyboard.press("Comma");
     await page.keyboard.up("Control");
     await expect(page.getByRole("dialog", { name: "User settings" })).toBeVisible();
+  });
+
+  test("server settings action respects admin feature flag", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Use Offline Demo" }).click();
+    await dismissOnboarding(page);
+    await expect(page.getByRole("heading", { name: "welcome" })).toBeVisible();
+
+    await page.keyboard.down("Control");
+    await page.keyboard.press("KeyK");
+    await page.keyboard.up("Control");
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+    await page.locator(".command-item", { hasText: "Open Server Settings" }).first().click();
+
+    if (!isAdvancedAdminEnabled()) {
+      await expect(page.getByText("Admin settings disabled")).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Server settings" })).toHaveCount(0);
+      return;
+    }
+
+    const settingsDialog = page.getByRole("dialog", { name: "Server settings" });
+    await expect(settingsDialog).toBeVisible();
+
+    const nameField = settingsDialog.getByLabel("Server Name");
+    await nameField.fill("Fray QA");
+    await settingsDialog.getByRole("button", { name: "Save Name" }).click();
+    await settingsDialog.getByRole("button", { name: "Save Overview" }).click();
+    await expect(settingsDialog.getByRole("heading", { name: "Fray QA" })).toBeVisible();
+    await settingsDialog.getByRole("button", { name: "Close" }).click();
+    await expect(settingsDialog).toHaveCount(0);
   });
 });

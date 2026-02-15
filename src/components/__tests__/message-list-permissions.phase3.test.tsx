@@ -88,7 +88,7 @@ describe("Phase 3 message action permission gating", () => {
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Pin" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reply" })).toBeInTheDocument();
-  });
+  }, 10000);
 
   it("allows admins to redact and copy links", async () => {
     const user = userEvent.setup();

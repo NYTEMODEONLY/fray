@@ -3,13 +3,13 @@ name: Chat Quality Gates
 on:
   pull_request:
     paths:
-      - "src/App.tsx"
-      - "src/components/**"
-      - "src/store/**"
-      - "src/services/**"
+      - "src/**"
       - "tests/e2e/**"
       - "playwright.config.ts"
+      - "vite.config.ts"
       - "vitest.config.ts"
+      - "scripts/check-bundle-budgets.mjs"
+      - "docs/bundle-summary-pr7.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/chat-quality-gates.yml"
@@ -42,6 +42,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Bundle budgets
+        run: npm run bundle:check
 
       - name: E2E critical flows
         run: npm run test:e2e

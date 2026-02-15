@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { EventStatus, MatrixEventEvent } from "matrix-js-sdk";
+import { EventStatus, MatrixEventEvent } from "../../matrix/client";
 import { Message, Room, Space } from "../../types";
 import { useAppStore } from "../appStore";
 

@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "bundle:check": "node scripts/check-bundle-budgets.mjs",
     "security:scan": "bash scripts/scan-secrets.sh full",
     "security:scan:staged": "bash scripts/scan-secrets.sh staged",
     "metrics:report": "node scripts/generate-metrics-report.mjs",
