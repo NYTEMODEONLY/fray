@@ -14,6 +14,7 @@ import {
   applyLayoutToSpaceRooms,
   applyProfileToUser,
   applyProfileToUsers,
+  areAdvancedCallsEnabled,
   buildSpaceIndex,
   canCurrentUserDeleteChannelsInSpace,
   createDefaultLayout,
@@ -404,6 +405,13 @@ export const createRoomsSliceState = (
       };
     }),
   createRoom: async ({ name, type, category }) => {
+    const callsDisabledForType =
+      !areAdvancedCallsEnabled() && (type === "voice" || type === "video");
+    if (callsDisabledForType) {
+      get().pushNotification("Calls disabled", "Enable VITE_ENABLE_ADVANCED_CALLS to create voice/video rooms.");
+      return;
+    }
+
     const client = get().matrixClient;
     if (!client) {
       set((state) => {
