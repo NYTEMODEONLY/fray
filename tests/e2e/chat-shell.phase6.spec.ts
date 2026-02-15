@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const advancedAdminEnabled = process.env.VITE_ENABLE_ADVANCED_ADMIN === "true";
+const isAdvancedAdminEnabled = () => process.env.VITE_ENABLE_ADVANCED_ADMIN === "true";
 
 const dismissOnboarding = async (page: Page) => {
   const onboarding = page.locator(".onboarding-card");
@@ -90,7 +90,7 @@ test.describe("Phase 6 critical chat shell flows", () => {
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
     await page.locator(".command-item", { hasText: "Open Server Settings" }).first().click();
 
-    if (!advancedAdminEnabled) {
+    if (!isAdvancedAdminEnabled()) {
       await expect(page.getByText("Admin settings disabled")).toBeVisible();
       await expect(page.getByRole("dialog", { name: "Server settings" })).toHaveCount(0);
       return;

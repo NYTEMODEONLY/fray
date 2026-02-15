@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { featureFlags } from "../../config/featureFlags";
 import { useAppStore } from "../appStore";
 
@@ -32,8 +32,15 @@ const resetCallsState = () => {
 };
 
 describe("Calls feature flag gating", () => {
+  const initialCallsFlag = featureFlags.enableAdvancedCalls;
+
   beforeEach(() => {
+    featureFlags.enableAdvancedCalls = false;
     resetCallsState();
+  });
+
+  afterEach(() => {
+    featureFlags.enableAdvancedCalls = initialCallsFlag;
   });
 
   it("blocks joinCall when VITE_ENABLE_ADVANCED_CALLS is disabled", async () => {
