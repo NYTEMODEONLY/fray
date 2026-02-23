@@ -1,0 +1,62 @@
+/* Left panel and room list behavior. */
+.mx_LeftPanel [class*="_roomListItem_"] {
+    border-radius: 10px;
+}
+
+.mx_LeftPanel [class*="_roomListItem_"] [class*="_container_"] {
+    border: 1px solid transparent;
+    border-radius: 10px !important;
+    transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.mx_LeftPanel [class*="_roomListItem_"]:hover [class*="_container_"],
+.mx_LeftPanel [class*="_roomListItem_"]:focus-visible [class*="_container_"] {
+    border-color: var(--fray-border);
+}
+
+.mx_LeftPanel [class*="_roomListItem_"][class*="_selected_"] [class*="_container_"] {
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.24), rgba(145, 70, 255, 0.08)) !important;
+    border-color: var(--fray-accent-border) !important;
+}
+
+.mx_LeftPanel [class*="_roomListItem_"][class*="_selected_"] [class*="_container_"]::before {
+    background-color: var(--fray-accent) !important;
+}
+
+.mx_RoomTile {
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.mx_RoomTile:hover,
+.mx_RoomTile:focus-within,
+.mx_RoomTile.mx_RoomTile_hasMenuOpen {
+    background-color: var(--fray-bg-3) !important;
+    border-color: var(--fray-border) !important;
+}
+
+.mx_RoomTile.mx_RoomTile_selected {
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.2), rgba(145, 70, 255, 0.06)) !important;
+    border-color: var(--fray-accent-border) !important;
+    box-shadow: inset 3px 0 0 var(--fray-accent);
+}
+
+.mx_RoomTile .mx_RoomTile_subtitle,
+.mx_RoomTile .mx_RoomTile_subtitle_text {
+    color: var(--fray-text-secondary) !important;
+}
+
+.mx_RoomTile.mx_RoomTile_selected .mx_RoomTile_title {
+    color: var(--fray-accent) !important;
+}
+
+.mx_NotificationBadge.mx_NotificationBadge_visible {
+    background-color: rgba(145, 70, 255, 0.22) !important;
+}
+
+.mx_NotificationBadge.mx_NotificationBadge_visible.mx_NotificationBadge_level_highlight {
+    background-color: var(--fray-accent) !important;
+}

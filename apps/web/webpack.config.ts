@@ -752,6 +752,7 @@ export default (env: string, argv: Record<string, any>): webpack.Configuration =
 
         output: {
             path: path.join(__dirname, "webapp"),
+            publicPath: "/app/",
 
             // There are a lot of assets that need to be kept in sync with each other
             // (once a user loads one version of the app, they need to keep being served

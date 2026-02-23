@@ -18,6 +18,7 @@
         "lint:prettier-fix": "prettier --log-level=warn --write .",
         "lint:workflows": "find .github/workflows -type f \\( -iname '*.yaml' -o -iname '*.yml' \\) | xargs -I {} sh -c 'echo \"Linting {}\"; action-validator \"{}\"'",
         "lint:knip": "knip",
+        "fray:verify-touchpoints": "node apps/web/scripts/fray/verify-touchpoints.mjs",
         "postinstall": "node scripts/pnpm-link.ts"
     },
     "resolutions": {

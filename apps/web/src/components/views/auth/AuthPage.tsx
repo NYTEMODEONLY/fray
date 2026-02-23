@@ -27,12 +27,10 @@ export default class AuthPage extends React.PureComponent<React.PropsWithChildre
     private static welcomeBackgroundUrl?: string;
 
     // cache the url as a static to prevent it changing without refreshing
-    private static getWelcomeBackgroundUrl(): string {
-        if (AuthPage.welcomeBackgroundUrl) return AuthPage.welcomeBackgroundUrl;
+    private static getWelcomeBackgroundUrl(): string | undefined {
+        if (AuthPage.welcomeBackgroundUrl !== undefined) return AuthPage.welcomeBackgroundUrl || undefined;
 
         const brandingConfig = SdkConfig.getObject("branding");
-        AuthPage.welcomeBackgroundUrl = "themes/element/img/backgrounds/lake.jpg";
-
         const configuredUrl = brandingConfig?.get("welcome_background_url");
         if (configuredUrl) {
             if (Array.isArray(configuredUrl)) {
@@ -41,15 +39,20 @@ export default class AuthPage extends React.PureComponent<React.PropsWithChildre
             } else {
                 AuthPage.welcomeBackgroundUrl = configuredUrl;
             }
+        } else {
+            // Fray uses CSS-driven auth backgrounds by default.
+            AuthPage.welcomeBackgroundUrl = "";
         }
 
-        return AuthPage.welcomeBackgroundUrl;
+        return AuthPage.welcomeBackgroundUrl || undefined;
     }
 
     public render(): React.ReactElement {
-        const pageStyle = {
-            background: `center/cover fixed url(${AuthPage.getWelcomeBackgroundUrl()})`,
-        };
+        const backgroundUrl = AuthPage.getWelcomeBackgroundUrl();
+        const pageStyle: React.CSSProperties = {};
+        if (backgroundUrl) {
+            pageStyle.background = `center/cover fixed url(${backgroundUrl})`;
+        }
 
         const modalStyle: React.CSSProperties = {
             position: "relative",
@@ -73,7 +76,7 @@ export default class AuthPage extends React.PureComponent<React.PropsWithChildre
         };
 
         let modalBlur;
-        if (this.props.addBlur !== false) {
+        if (this.props.addBlur !== false && pageStyle.background) {
             // Blur out the background: add a `div` which covers the content behind the modal,
             // and blurs it out.
             modalBlur = <div className="mx_AuthPage_modalBlur" style={blurStyle} />;

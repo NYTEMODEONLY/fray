@@ -1,0 +1,39 @@
+/* Fray dark theme overrides - loaded AFTER Compound CSS */
+/* per design_philo.md: deep purple-black bg, white text */
+/* ******************** */
+
+/* Compound Tooltip: uses hashed CSS module class ._tooltip_1nqnq_8 */
+/* and role="tooltip" for description tooltips. FloatingPortal renders */
+/* these at document root inside .cpd-theme-dark scope, so we need */
+/* !important to beat the Compound token resolution. */
+._tooltip_1nqnq_8 {
+    background: #1a0b2e !important;
+    color: hsl(0, 0%, 98%) !important;
+}
+
+._arrow_1nqnq_33 {
+    fill: #1a0b2e !important;
+}
+
+/* Also catch via role attr for description tooltips */
+[role="tooltip"] {
+    background: #1a0b2e !important;
+    color: hsl(0, 0%, 98%) !important;
+}
+
+/* InteractiveTooltip uses $background variable, not Compound tokens */
+.mx_InteractiveTooltip {
+    background-color: #1a0b2e !important;
+    color: hsl(0, 0%, 98%) !important;
+}
+
+.mx_InteractiveTooltip_chevron_top {
+    border-bottom-color: #1a0b2e !important;
+    background-color: #1a0b2e !important;
+}
+
+.mx_InteractiveTooltip_chevron_bottom {
+    border-top-color: #1a0b2e !important;
+    background-color: #1a0b2e !important;
+}
+/* ******************** */

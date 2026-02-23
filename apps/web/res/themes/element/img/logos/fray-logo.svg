@@ -1,0 +1,13 @@
+<svg width="96" height="96" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fray logo">
+    <defs>
+        <linearGradient id="frayLogoGradient" x1="18" y1="14" x2="78" y2="84" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#9d5cff" />
+            <stop offset="1" stop-color="#6d32e0" />
+        </linearGradient>
+    </defs>
+    <circle cx="48" cy="48" r="42" fill="url(#frayLogoGradient)" />
+    <path
+        d="M36 24h29v8H45v12h18v8H45v20h-9V24z"
+        fill="#ffffff"
+    />
+</svg>

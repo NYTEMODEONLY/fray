@@ -2,139 +2,232 @@
     /* we deliberately inline style here to avoid flash-of-CSS problems, and to avoid
  * voodoo where we have to set display: none by default
  */
-
-    .mx_Header_title::after {
-        content: "!";
-    }
-
     .mx_Parent {
-        display: -webkit-box;
-        display: -webkit-flex;
-        display: -ms-flexbox;
+        --fray-accent: #9146ff;
+        --fray-accent-hover: #7c3aed;
+        --fray-accent-soft: rgba(145, 70, 255, 0.25);
+        --fray-surface: #131316;
+        --fray-surface-strong: #1a1a1f;
+        --fray-border: rgba(255, 255, 255, 0.14);
+        --fray-text-primary: #efedf7;
+        --fray-text-secondary: #c2bed1;
+
+        position: relative;
+        isolation: isolate;
+        width: min(760px, calc(100vw - 40px));
         display: flex;
-        -webkit-box-orient: vertical;
-        -webkit-box-direction: normal;
-        -webkit-flex-direction: column;
-        -ms-flex-direction: column;
         flex-direction: column;
-        -webkit-box-pack: center;
-        -webkit-justify-content: center;
-        -ms-flex-pack: center;
-        justify-content: center;
-        -webkit-box-align: center;
-        -webkit-align-items: center;
-        -ms-flex-align: center;
         align-items: center;
         text-align: center;
-        padding: 25px 35px;
+        margin: 8px 0 0;
+        padding: 36px 34px 32px;
+        border-radius: 26px;
+        border: 1px solid var(--fray-border);
+        background:
+            radial-gradient(130% 120% at 14% 0%, rgba(145, 70, 255, 0.36), transparent 56%),
+            linear-gradient(170deg, #111116 0%, #15151a 52%, #101013 100%);
+        box-shadow:
+            0 32px 78px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.07);
+        overflow: hidden;
     }
 
-    .mx_Logo {
-        height: 54px;
-        margin-top: 2px;
+    .mx_Parent::before {
+        content: "";
+        position: absolute;
+        inset: -36% auto auto -30%;
+        width: 320px;
+        height: 320px;
+        border-radius: 999px;
+        z-index: -2;
+        opacity: 0.6;
+        background: radial-gradient(circle, rgba(145, 70, 255, 0.5), rgba(145, 70, 255, 0));
     }
 
-    .mx_ButtonGroup {
-        margin-top: 10px;
+    .mx_Parent::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        opacity: 0.12;
+        background-image:
+            linear-gradient(to right, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+        background-size: 34px 34px;
+        mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
     }
 
-    .mx_ButtonRow {
-        display: -webkit-box;
-        display: -webkit-flex;
-        display: -ms-flexbox;
-        display: flex;
-        -webkit-justify-content: space-around;
-        -ms-flex-pack: distribute;
-        -webkit-box-align: center;
-        -webkit-align-items: center;
-        -ms-flex-align: center;
+    .mx_BrandPill {
+        display: inline-flex;
         align-items: center;
-        justify-content: space-between;
-        box-sizing: border-box;
-        margin: 12px 0 0;
-    }
-
-    .mx_ButtonRow > * {
-        margin: 0 10px;
-    }
-
-    .mx_ButtonRow > *:first-child {
-        margin-left: 0;
-    }
-
-    .mx_ButtonRow > *:last-child {
-        margin-right: 0;
-    }
-
-    .mx_ButtonParent {
-        display: -webkit-box;
-        display: -webkit-flex;
-        display: -ms-flexbox;
-        display: flex;
-        padding: 10px 20px;
-        -webkit-box-orient: horizontal;
-        -webkit-box-direction: normal;
-        -webkit-flex-direction: row;
-        -ms-flex-direction: row;
-        flex-direction: row;
-        -webkit-box-pack: center;
-        -webkit-justify-content: center;
-        -ms-flex-pack: center;
         justify-content: center;
-        -webkit-box-align: center;
-        -webkit-align-items: center;
-        -ms-flex-align: center;
-        align-items: center;
-        border-radius: 4px;
-        width: 150px;
-        background-repeat: no-repeat;
-        background-position: 10px center;
-        text-decoration: none;
-        color: #2e2f32 !important;
+        min-width: 56px;
+        min-height: 56px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        color: #ffffff;
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        background: linear-gradient(145deg, var(--fray-accent), #5f34c4);
+        box-shadow:
+            0 14px 34px rgba(145, 70, 255, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        animation: mx_welcomeFloat 7s ease-in-out infinite;
     }
 
-    .mx_ButtonLabel {
-        margin-left: 20px;
+    .mx_Kicker {
+        margin: 12px 0 0;
+        color: #bda7ff;
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
     }
 
     .mx_Header_title {
-        font-size: 24px;
-        font-weight: 600;
-        margin: 20px 0 0;
+        margin: 14px 0 0;
+        color: var(--fray-text-primary);
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: clamp(32px, 4vw, 44px);
+        line-height: 1.1;
+        font-weight: 760;
+        letter-spacing: -0.02em;
     }
 
     .mx_Header_subtitle {
+        margin: 14px auto 0;
+        max-width: 560px;
+        color: var(--fray-text-secondary);
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 15px;
+        line-height: 1.55;
+        font-weight: 420;
+    }
+
+    .mx_FeatureStrip {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin: 22px 0 0;
+    }
+
+    .mx_FeatureStrip span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.06);
+        color: #ddd8eb;
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
         font-size: 12px;
-        font-weight: normal;
-        margin: 8px 0 0;
+        font-weight: 560;
+        letter-spacing: 0.02em;
+    }
+
+    .mx_ButtonGroup {
+        margin-top: 22px;
+        width: 100%;
+        max-width: 580px;
+    }
+
+    .mx_ButtonRow {
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+        gap: 12px;
+        margin: 12px 0 0;
+    }
+
+    .mx_ButtonParent {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
+        width: 100%;
+        padding: 12px 16px 12px 42px;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        background-repeat: no-repeat;
+        background-position: 14px center;
+        text-decoration: none;
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+        transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
+    }
+
+    .mx_ButtonParent:hover {
+        transform: translateY(-1px);
+    }
+
+    .mx_ButtonParent:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(145, 70, 255, 0.34);
+    }
+
+    .mx_ButtonLabel {
+        margin-left: 2px;
     }
 
     .mx_ButtonSignIn {
-        background-color: #368bd6;
-        color: white !important;
+        color: #ffffff !important;
+        background-image:
+            linear-gradient(130deg, var(--fray-accent), var(--fray-accent-hover)),
+            url("welcome/images/icon-sign-in.svg");
+        background-repeat: no-repeat, no-repeat;
+        background-size: auto, 18px;
+        background-position: center center, 14px center;
+        box-shadow: 0 12px 24px rgba(145, 70, 255, 0.28);
+    }
+
+    .mx_ButtonSignIn:hover {
+        box-shadow: 0 16px 28px rgba(145, 70, 255, 0.34);
     }
 
     .mx_ButtonCreateAccount {
-        background-color: #0dbd8b;
-        color: white !important;
+        color: #e8e2fa !important;
+        border-color: rgba(145, 70, 255, 0.5);
+        background-image:
+            linear-gradient(140deg, rgba(145, 70, 255, 0.35), rgba(82, 49, 170, 0.22)),
+            url("welcome/images/icon-create-account.svg");
+        background-repeat: no-repeat, no-repeat;
+        background-size: auto, 18px;
+        background-position: center center, 14px center;
+    }
+
+    .mx_ButtonCreateAccount:hover {
+        background: linear-gradient(140deg, rgba(145, 70, 255, 0.48), rgba(82, 49, 170, 0.3));
     }
 
     .mx_SecondaryButton {
-        background-color: #ffffff;
-        color: #2e2f32;
+        color: #e4dff2 !important;
+        border-color: rgba(255, 255, 255, 0.2);
+        background-image: url("welcome/images/icon-room-directory.svg");
+        background-repeat: no-repeat;
+        background-size: 18px;
+        background-position: 14px center;
+        background-color: var(--fray-surface-strong);
     }
 
-    .mx_Button_iconSignIn {
-        background-image: url("welcome/images/icon-sign-in.svg");
+    .mx_SecondaryButton:hover {
+        background-color: #24242b;
     }
-    .mx_Button_iconCreateAccount {
-        background-image: url("welcome/images/icon-create-account.svg");
-    }
-    .mx_Button_iconHelp {
-        background-image: url("welcome/images/icon-help.svg");
-    }
-    .mx_Button_iconRoomDirectory {
-        background-image: url("welcome/images/icon-room-directory.svg");
+
+    .mx_MatrixHint {
+        margin: 18px 0 0;
+        color: #9f9bb3;
+        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-size: 12px;
+        font-weight: 450;
+        letter-spacing: 0.02em;
     }
 
     /*
@@ -146,31 +239,57 @@ we don't have an account and should hide them. No account == no guest account ei
         display: none;
     }
 
-    .mx_ButtonRow.mx_WelcomePage_guestFunctions {
-        margin-top: 20px;
-    }
     .mx_ButtonRow.mx_WelcomePage_guestFunctions > div {
-        margin: 0 auto;
+        width: 100%;
     }
 
-    @media only screen and (max-width: 480px) {
-        .mx_ButtonRow {
-            flex-direction: column;
+    @keyframes mx_welcomeFloat {
+        0% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-3px);
+        }
+        100% {
+            transform: translateY(0);
+        }
+    }
+
+    @media only screen and (max-width: 900px) {
+        .mx_Parent {
+            width: min(680px, calc(100vw - 28px));
+        }
+    }
+
+    @media only screen and (max-width: 640px) {
+        .mx_Parent {
+            border-radius: 20px;
+            padding: 26px 18px 24px;
         }
 
-        .mx_ButtonRow > * {
-            margin: 0 0 10px 0;
+        .mx_ButtonRow {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mx_ButtonParent {
+            min-height: 50px;
         }
     }
 </style>
 
 <div class="mx_Parent">
-    <a href="https://element.io" target="_blank" rel="noopener">
-        <img src="$logoUrl" alt="$brand" class="mx_Logo" />
-    </a>
-    <h1 class="mx_Header_title">_t("welcome_to_element")</h1>
-    <!-- XXX: Our translations system isn't smart enough to recognize variables in the HTML, so we manually do it -->
-    <h2 class="mx_Header_subtitle">_t("powered_by_matrix_with_logo")</h2>
+    <div class="mx_BrandPill">F</div>
+    <p class="mx_Kicker">Into the Fray</p>
+    <h1 class="mx_Header_title">Welcome to $brand</h1>
+    <p class="mx_Header_subtitle">
+        A focused, encrypted Matrix client for communities and friends who want crisp chat and reliable voice without the clutter.
+    </p>
+    <div class="mx_FeatureStrip">
+        <span>Dark-first design</span>
+        <span>E2EE by default</span>
+        <span>Voice-ready rooms</span>
+    </div>
     <div class="mx_ButtonGroup">
         <div class="mx_ButtonRow">
             <a href="#/login" class="mx_ButtonParent mx_ButtonSignIn mx_Button_iconSignIn">
@@ -188,4 +307,5 @@ we don't have an account and should hide them. No account == no guest account ei
             </div>
         </div>
     </div>
+    <p class="mx_MatrixHint">Powered by open Matrix standards</p>
 </div>

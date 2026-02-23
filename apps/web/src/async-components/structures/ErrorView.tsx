@@ -27,14 +27,14 @@ interface IProps {
 }
 
 export const ErrorView: React.FC<IProps> = ({ title, messages, footer, children }) => {
+    const config = SdkConfig.get();
+    const brandingConfig = SdkConfig.getObject("branding");
+    const logoUrl = brandingConfig?.get("auth_header_logo_url") ?? "themes/element/img/logos/fray-logo.svg";
+    const brand = config.brand ?? "Fray";
+
     return (
         <div className="mx_ErrorView cpd-theme-light">
-            <img
-                className="mx_ErrorView_logo"
-                height="160"
-                src="themes/element/img/logos/element-app-logo.png"
-                alt="Element"
-            />
+            <img className="mx_ErrorView_logo" height="160" src={logoUrl} alt={brand} />
             <div className="mx_ErrorView_container">
                 <Heading size="md" weight="semibold">
                     {title}
@@ -119,7 +119,7 @@ export const UnsupportedBrowserView: React.FC<{
     onAccept?(this: void): void;
 }> = ({ onAccept }) => {
     const config = SdkConfig.get();
-    const brand = config.brand ?? "Element";
+    const brand = config.brand ?? "Fray";
 
     const hasDesktopBuilds =
         config.desktop_builds?.available &&

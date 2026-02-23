@@ -2,7 +2,7 @@
 <html lang="en" style="height: 100%;">
   <head>
     <meta charset="utf-8">
-    <title>Element</title>
+    <title>Fray</title>
     <link rel="apple-touch-icon" sizes="120x120" href="<%= require('../../res/vector-icons/120.png') %>">
     <link rel="apple-touch-icon" sizes="144x144" href="<%= require('../../res/vector-icons/144.png') %>">
     <link rel="apple-touch-icon" sizes="152x152" href="<%= require('../../res/vector-icons/152.png') %>">
@@ -13,9 +13,9 @@
     <link rel="icon" type="image/png" sizes="144x144" href="<%= require('../../res/vector-icons/144.png') %>">
     <link rel="icon" type="image/png" sizes="512x512" href="<%= require('../../res/vector-icons/512.png') %>">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="apple-mobile-web-app-title" content="Element">
-    <meta name="application-name" content="Element">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-title" content="Fray">
+    <meta name="application-name" content="Fray">
+    <meta name="theme-color" content="#0f0f0f">
     <meta property="og:image" content="<%= og_image_url %>" />
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
@@ -33,7 +33,7 @@
     ">
     <% for (var i=0; i < htmlWebpackPlugin.files.css.length; i++) {
         var file = htmlWebpackPlugin.files.css[i];
-        var match = file.match(/^bundles\/.*?\/theme-(.*)\.css$/);
+        var match = file.match(/(?:^|\/)bundles\/.*?\/theme-(.*)\.css$/);
         if (match) {
             var title = match[1].charAt(0).toUpperCase() + match[1].slice(1);
         %>
@@ -52,7 +52,7 @@
 
   </head>
   <body style="height: 100%; margin: 0;">
-    <noscript>Sorry, Element requires JavaScript to be enabled.</noscript> <!-- TODO: Translate this? -->
+    <noscript>Sorry, Fray requires JavaScript to be enabled.</noscript> <!-- TODO: Translate this? -->
     <div id="matrixchat" style="height: 100%;" class="notranslate"></div>
 
 <%

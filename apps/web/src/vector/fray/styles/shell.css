@@ -1,0 +1,41 @@
+/* App shell and base surfaces. */
+html,
+body {
+    background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.14), transparent 55%), var(--fray-bg-0) !important;
+    color: var(--fray-text-strong) !important;
+}
+
+#matrixchat,
+.mx_MatrixChat,
+.mx_RoomView,
+.mx_RoomView_body {
+    background: transparent !important;
+    color: var(--fray-text-strong) !important;
+}
+
+.mx_SpacePanel,
+.mx_LeftPanel,
+.mx_LeftPanel .mx_LeftPanel_roomListContainer,
+.mx_LeftPanel_wrapper .mx_LeftPanel_wrapper--user {
+    background-color: var(--fray-bg-1) !important;
+}
+
+.mx_LeftPanel .mx_LeftPanel_filterContainer {
+    border-bottom-color: var(--fray-border) !important;
+}
+
+.mx_LeftPanel .mx_LeftPanel_dialPadButton,
+.mx_LeftPanel .mx_LeftPanel_exploreButton,
+.mx_SearchBox {
+    background-color: var(--fray-bg-2) !important;
+    border: 1px solid var(--fray-border);
+}
+
+.mx_LeftPanel .mx_LeftPanel_dialPadButton:hover,
+.mx_LeftPanel .mx_LeftPanel_exploreButton:hover {
+    background-color: var(--fray-bg-3) !important;
+}
+
+.mx_LeftPanel [class*="_view_"] {
+    border-bottom-color: var(--fray-border) !important;
+}

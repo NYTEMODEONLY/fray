@@ -1,0 +1,21 @@
+/* Mentions, links, and hidden theme controls. */
+.mx_Pill,
+.mx_UserPill,
+.mx_RoomPill,
+a[data-mention-type] {
+    color: #f3ebff !important;
+    background: rgba(145, 70, 255, 0.24) !important;
+    border: 1px solid rgba(145, 70, 255, 0.42) !important;
+}
+
+.mx_EventTile a,
+.mx_MTextBody a,
+.mx_StyledLink,
+.mx_AuthBody a {
+    color: #bf9cff !important;
+}
+
+[data-testid="themePanel"],
+.mx_QuickThemeSwitcher {
+    display: none !important;
+}

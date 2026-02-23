@@ -1,0 +1,23 @@
+# Fray direct touchpoints in upstream files.
+# Keep this list intentionally small. Add entries only when a scoped override cannot be isolated under src/vector/fray/.
+
+package.json
+res/css/views/auth/_Welcome.pcss
+res/manifest.json
+res/welcome.html
+src/SdkConfig.ts
+src/async-components/structures/ErrorView.tsx
+src/components/structures/HomePage.tsx
+src/components/views/auth/AuthHeaderLogo.tsx
+src/components/views/auth/AuthPage.tsx
+src/components/views/auth/Welcome.tsx
+src/i18n/strings/en_EN.json
+src/vector/index.html
+src/vector/index.ts
+src/vector/mobile_guide/index.html
+src/vector/mobile_guide/index.ts
+src/vector/mobile_guide/mobile-apps.ts
+webpack.config.ts
+res/themes/dark/css/_dark.pcss
+res/themes/dark/css/dark.pcss
+res/themes/dark-custom/css/dark-custom.pcss

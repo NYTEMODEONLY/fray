@@ -1,0 +1,68 @@
+/* Fray theme tokens and semantic color mappings. */
+:root,
+[class*="cpd-theme-"] {
+    --fray-accent: #9146ff;
+    --fray-accent-hover: #7c3aed;
+    --fray-accent-pressed: #6d28d9;
+    --fray-accent-soft: rgba(145, 70, 255, 0.18);
+    --fray-accent-border: rgba(145, 70, 255, 0.45);
+
+    --fray-bg-0: #0f0f0f;
+    --fray-bg-1: #121212;
+    --fray-bg-2: #181818;
+    --fray-bg-3: #1e1e1e;
+    --fray-bg-4: #252525;
+
+    --fray-text-strong: #e0e0e0;
+    --fray-text-primary: #cbcbcb;
+    --fray-text-secondary: #a0a0a0;
+    --fray-border: #2a2a2a;
+    --fray-border-strong: #363636;
+
+    --fray-bubble-other: #171717;
+    --fray-bubble-self: #2a1b46;
+    --fray-bubble-hover: #232323;
+    --fray-focus-ring: 0 0 0 2px rgba(145, 70, 255, 0.3);
+
+    --accent: var(--fray-accent);
+    --accent-hover: var(--fray-accent-hover);
+    --bg: var(--fray-bg-0);
+    --surface: var(--fray-bg-1);
+    --text-primary: var(--fray-text-strong);
+    --text-secondary: var(--fray-text-secondary);
+    --divider: var(--fray-border);
+
+    --cpd-color-bg-canvas-default: var(--fray-bg-0);
+    --cpd-color-bg-subtle-primary: var(--fray-bg-2);
+    --cpd-color-bg-subtle-secondary: var(--fray-bg-3);
+    --cpd-color-bg-subtle-tertiary: var(--fray-bg-4);
+    --cpd-color-bg-action-primary-rest: var(--fray-accent);
+    --cpd-color-bg-action-primary-hover: var(--fray-accent-hover);
+    --cpd-color-bg-action-primary-hovered: var(--fray-accent-hover);
+    --cpd-color-bg-action-primary-pressed: var(--fray-accent-pressed);
+    --cpd-color-bg-action-secondary-rest: var(--fray-bg-2);
+    --cpd-color-bg-action-secondary-hovered: var(--fray-bg-3);
+    --cpd-color-bg-action-secondary-pressed: var(--fray-bg-4);
+    --cpd-color-bg-action-tertiary-hovered: rgba(145, 70, 255, 0.14);
+    --cpd-color-bg-action-tertiary-selected: rgba(145, 70, 255, 0.24);
+    --cpd-color-bg-accent-rest: var(--fray-accent);
+    --cpd-color-bg-accent-hovered: var(--fray-accent-hover);
+    --cpd-color-bg-accent-pressed: var(--fray-accent-pressed);
+    --cpd-color-text-primary: var(--fray-text-strong);
+    --cpd-color-text-secondary: var(--fray-text-secondary);
+    --cpd-color-text-action-accent: var(--fray-accent);
+    --cpd-color-text-link-external: #bf9cff;
+    --cpd-color-text-on-solid-primary: #f8f7ff;
+    --cpd-color-border-subtle-primary: var(--fray-border);
+    --cpd-color-border-interactive-primary: var(--fray-accent-border);
+    --cpd-color-gray-300: #292929;
+    --cpd-color-gray-400: #343434;
+    --cpd-color-gray-600: #4b4b4b;
+    --cpd-color-gray-800: #808080;
+    --cpd-color-gray-1400: #be9fff;
+    --cpd-color-icon-primary: #cccccc;
+    --cpd-color-icon-secondary: #9f9f9f;
+    --cpd-color-icon-accent-primary: var(--fray-accent);
+    --cpd-color-icon-accent-tertiary: var(--fray-accent);
+    --cpd-color-icon-success-primary: var(--fray-accent);
+}

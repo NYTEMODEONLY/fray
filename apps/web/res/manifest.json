@@ -1,42 +1,43 @@
 {
-    "name": "Element",
-    "short_name": "Element",
+    "name": "Fray",
+    "short_name": "Fray",
     "display": "standalone",
-    "theme_color": "#76CFA6",
+    "theme_color": "#9146ff",
+    "background_color": "#0f0f0f",
     "start_url": "index.html",
     "icons": [
         {
-            "src": "/vector-icons/24.png",
+            "src": "vector-icons/24.png",
             "sizes": "24x24",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/120.png",
+            "src": "vector-icons/120.png",
             "sizes": "120x120",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/144.png",
+            "src": "vector-icons/144.png",
             "sizes": "144x144",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/152png",
+            "src": "vector-icons/152png",
             "sizes": "152x152",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/180.png",
+            "src": "vector-icons/180.png",
             "sizes": "180x180",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/512.png",
+            "src": "vector-icons/512.png",
             "sizes": "512x512",
             "type": "image/png"
         },
         {
-            "src": "/vector-icons/1024.png",
+            "src": "vector-icons/1024.png",
             "sizes": "1024x1024",
             "type": "image/png"
         }

@@ -1730,13 +1730,13 @@
         "m.key.verification.request": "%(name)s is requesting verification"
     },
     "onboarding": {
-        "create_room": "Create a Group Chat",
-        "explore_rooms": "Explore Public Rooms",
+        "create_room": "Create a Fray Room",
+        "explore_rooms": "Explore Fray Rooms",
         "has_avatar_label": "Great, that'll help people know it's you",
-        "intro_byline": "Own your conversations.",
+        "intro_byline": "Into the Fray: secure conversations, zero clutter.",
         "intro_welcome": "Welcome to %(appName)s",
         "no_avatar_label": "Add a photo so people know it's you.",
-        "send_dm": "Send a Direct Message",
+        "send_dm": "Start a Direct Chat",
         "welcome_detail": "Now, let's help you get started",
         "welcome_user": "Welcome %(name)s"
     },

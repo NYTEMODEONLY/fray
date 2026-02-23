@@ -1,0 +1,36 @@
+/* Room header and active room surface details. */
+.mx_RoomHeader {
+    border-bottom-color: var(--fray-border) !important;
+    background: linear-gradient(180deg, rgba(24, 24, 24, 0.95), rgba(15, 15, 15, 0.95)) !important;
+    backdrop-filter: blur(8px);
+}
+
+.mx_RoomHeader:hover {
+    background: linear-gradient(180deg, rgba(32, 32, 32, 0.95), rgba(18, 18, 18, 0.95)) !important;
+}
+
+.mx_RoomHeader .mx_FacePile {
+    border: 1px solid var(--fray-border);
+    background: var(--fray-bg-2) !important;
+}
+
+.mx_RoomHeader .mx_FacePile:hover {
+    background: var(--fray-bg-3) !important;
+}
+
+.mx_RoomHeader .mx_FacePile.mx_FacePile_toggled {
+    color: var(--fray-accent) !important;
+    background: var(--fray-accent-soft) !important;
+    border-color: var(--fray-accent-border);
+}
+
+.mx_RoomHeader .mx_RoomHeader_toggled,
+.mx_CallEvent_button,
+.mx_LegacyCallViewButtons_button_on {
+    color: var(--fray-accent) !important;
+    fill: var(--fray-accent) !important;
+}
+
+.mx_RoomView_messagePanel {
+    background: linear-gradient(180deg, rgba(12, 12, 12, 0.72), rgba(16, 16, 16, 0.88)) !important;
+}

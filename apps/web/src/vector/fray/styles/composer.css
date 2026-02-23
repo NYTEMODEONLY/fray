@@ -1,0 +1,52 @@
+/* Composer styling and send interactions. */
+.mx_MessageComposer_wrapper {
+    border-top-color: var(--fray-border) !important;
+    background: linear-gradient(180deg, rgba(15, 15, 15, 0.94), rgba(18, 18, 18, 0.98));
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.mx_MessageComposer_input textarea,
+.mx_BasicMessageComposer .mx_BasicMessageComposer_input,
+.mx_WysiwygComposer_Editor_content {
+    color: var(--fray-text-strong) !important;
+}
+
+.mx_MessageComposer_input textarea {
+    background-color: transparent !important;
+}
+
+.mx_MessageComposer_input textarea::placeholder {
+    color: var(--fray-text-secondary) !important;
+}
+
+.mx_SendWysiwygComposer .mx_WysiwygComposer_Editor {
+    background-color: var(--fray-bg-2) !important;
+    border-color: var(--fray-border-strong) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.mx_SendWysiwygComposer-focused .mx_WysiwygComposer_Editor {
+    border-color: var(--fray-accent-border) !important;
+    box-shadow: var(--fray-focus-ring);
+}
+
+.mx_MessageComposer_button {
+    background-color: var(--fray-bg-3) !important;
+    border-radius: 8px;
+}
+
+.mx_MessageComposer_button:hover {
+    background-color: var(--fray-bg-4) !important;
+}
+
+.mx_MessageComposer_sendMessage {
+    background: linear-gradient(135deg, var(--fray-accent), var(--fray-accent-hover)) !important;
+    box-shadow: 0 10px 20px rgba(145, 70, 255, 0.34);
+}
+
+.mx_MessageComposer_sendMessage:hover {
+    background: linear-gradient(135deg, var(--fray-accent-hover), var(--fray-accent-pressed)) !important;
+    transform: translateY(-1px);
+}
+
