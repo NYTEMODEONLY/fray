@@ -4,20 +4,23 @@
     --fray-accent: #9146ff;
     --fray-accent-hover: #7c3aed;
     --fray-accent-pressed: #6d28d9;
-    --fray-accent-soft: rgba(145, 70, 255, 0.18);
-    --fray-accent-border: rgba(145, 70, 255, 0.45);
+    --fray-accent-soft: rgba(145, 70, 255, 0.12);
+    --fray-accent-border: rgba(145, 70, 255, 0.3);
 
-    --fray-bg-0: #0f0f0f;
-    --fray-bg-1: #121212;
-    --fray-bg-2: #181818;
+    --fray-bg-0: #0a0a0a;
+    --fray-bg-1: #111111;
+    --fray-bg-2: #171717;
     --fray-bg-3: #1e1e1e;
     --fray-bg-4: #252525;
 
-    --fray-text-strong: #e0e0e0;
-    --fray-text-primary: #cbcbcb;
-    --fray-text-secondary: #a0a0a0;
-    --fray-border: #2a2a2a;
-    --fray-border-strong: #363636;
+    --fray-text-strong: #ebebeb;
+    --fray-text-primary: #c8c8c8;
+    --fray-text-secondary: #999999;
+    --fray-text-tertiary: #555555;
+    --fray-border: #222222;
+    --fray-border-strong: #2a2a2a;
+
+    --fray-mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
 
     --fray-bubble-other: #171717;
     --fray-bubble-self: #2a1b46;

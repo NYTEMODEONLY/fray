@@ -1,7 +1,7 @@
 /* Composer styling and send interactions. */
 .mx_MessageComposer_wrapper {
     border-top-color: var(--fray-border) !important;
-    background: linear-gradient(180deg, rgba(15, 15, 15, 0.94), rgba(18, 18, 18, 0.98));
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.94), rgba(17, 17, 17, 0.98));
     padding-top: 8px;
     padding-bottom: 8px;
 }
@@ -42,7 +42,7 @@
 
 .mx_MessageComposer_sendMessage {
     background: linear-gradient(135deg, var(--fray-accent), var(--fray-accent-hover)) !important;
-    box-shadow: 0 10px 20px rgba(145, 70, 255, 0.34);
+    box-shadow: 0 10px 20px rgba(145, 70, 255, 0.25);
 }
 
 .mx_MessageComposer_sendMessage:hover {

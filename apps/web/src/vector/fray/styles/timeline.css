@@ -15,7 +15,7 @@
 }
 
 .mx_EventTile[data-layout="bubble"][data-self="true"] .mx_EventTile_line {
-    background: linear-gradient(145deg, rgba(145, 70, 255, 0.34), rgba(64, 34, 112, 0.66)) !important;
+    background: linear-gradient(145deg, rgba(145, 70, 255, 0.28), rgba(64, 34, 112, 0.56)) !important;
     border-color: rgba(145, 70, 255, 0.52) !important;
 }
 
@@ -26,6 +26,6 @@
 
 .mx_EventTile .mx_ReplyChain_wrapper,
 .mx_EventTile .mx_ReplyTile {
-    background-color: rgba(145, 70, 255, 0.08) !important;
+    background-color: rgba(145, 70, 255, 0.06) !important;
     border-color: var(--fray-accent-border) !important;
 }

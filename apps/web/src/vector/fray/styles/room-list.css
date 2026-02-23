@@ -15,7 +15,7 @@
 }
 
 .mx_LeftPanel [class*="_roomListItem_"][class*="_selected_"] [class*="_container_"] {
-    background: linear-gradient(90deg, rgba(145, 70, 255, 0.24), rgba(145, 70, 255, 0.08)) !important;
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.18), rgba(145, 70, 255, 0.06)) !important;
     border-color: var(--fray-accent-border) !important;
 }
 
@@ -54,7 +54,7 @@
 }
 
 .mx_NotificationBadge.mx_NotificationBadge_visible {
-    background-color: rgba(145, 70, 255, 0.22) !important;
+    background-color: rgba(145, 70, 255, 0.15) !important;
 }
 
 .mx_NotificationBadge.mx_NotificationBadge_visible.mx_NotificationBadge_level_highlight {

@@ -1,0 +1,89 @@
+/*
+ * Fray Theme Overrides — Landing Site Alignment (Feb 2026)
+ *
+ * This file is deployed as a standalone override on the VPS, loaded AFTER
+ * the compiled bundle.css. It re-declares custom properties and overrides
+ * hardcoded values from the build so we can stay in sync with the landing
+ * site (fray.chat) without rebuilding the full Element Web bundle.
+ *
+ * To update: edit this file locally, scp to /var/www/fray.chat/app/fray-overrides.css
+ */
+
+/* ── Token overrides ────────────────────────────────────────── */
+:root,
+[class*="cpd-theme-"] {
+    --fray-accent-soft: rgba(145, 70, 255, 0.12);
+    --fray-accent-border: rgba(145, 70, 255, 0.3);
+
+    --fray-bg-0: #0a0a0a;
+    --fray-bg-1: #111111;
+    --fray-bg-2: #171717;
+    /* --fray-bg-3 already #1e1e1e — no change */
+
+    --fray-text-strong: #ebebeb;
+    --fray-text-primary: #c8c8c8;
+    --fray-text-secondary: #999999;
+    --fray-text-tertiary: #555555;
+    --fray-border: #222222;
+    --fray-border-strong: #2a2a2a;
+
+    --fray-mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+
+    --fray-focus-ring: 0 0 0 2px rgba(145, 70, 255, 0.3);
+}
+
+/* ── Shell: subtler radial glow ─────────────────────────────── */
+html, body {
+    background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.08), transparent 55%), #0a0a0a !important;
+    background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.08), transparent 55%), var(--fray-bg-0) !important;
+    color: #ebebeb !important;
+    color: var(--fray-text-strong) !important;
+}
+
+/* ── Auth page ──────────────────────────────────────────────── */
+.mx_AuthPage {
+    background:
+        radial-gradient(900px circle at 12% 0%, rgba(145, 70, 255, 0.08), transparent 55%),
+        linear-gradient(180deg, #0a0a0a 0%, #111111 100%) !important;
+}
+
+/* ── Room list: selected room gradient ──────────────────────── */
+.mx_LeftPanel [class*="_roomListItem_"][class*="_selected_"] [class*="_container_"] {
+    background: linear-gradient(90deg, rgba(145, 70, 255, 0.18), rgba(145, 70, 255, 0.06)) !important;
+}
+
+/* ── Notification badge ─────────────────────────────────────── */
+.mx_NotificationBadge.mx_NotificationBadge_visible {
+    background-color: rgba(145, 70, 255, 0.15) !important;
+}
+
+/* ── Timeline: self-message bubbles ─────────────────────────── */
+.mx_EventTile[data-layout="bubble"][data-self="true"] .mx_EventTile_line {
+    background: linear-gradient(145deg, rgba(145, 70, 255, 0.28), rgba(64, 34, 112, 0.56)) !important;
+}
+
+/* ── Timeline: reply chain accent ───────────────────────────── */
+.mx_EventTile .mx_ReplyChain_wrapper,
+.mx_EventTile .mx_ReplyTile {
+    background-color: rgba(145, 70, 255, 0.06) !important;
+}
+
+/* ── Composer: gradient and send button shadow ──────────────── */
+.mx_MessageComposer_wrapper {
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.94), rgba(17, 17, 17, 0.98));
+}
+
+.mx_MessageComposer_sendMessage {
+    box-shadow: 0 10px 20px rgba(145, 70, 255, 0.25);
+}
+
+/* ── Content: pills ─────────────────────────────────────────── */
+.mx_Pill,
+.mx_UserPill,
+.mx_RoomPill,
+a[data-mention-type] {
+    background: rgba(145, 70, 255, 0.18) !important;
+    border: 1px solid rgba(145, 70, 255, 0.3) !important;
+}
+
+/* ── Meta color: theme-color for browser chrome ─────────────── */

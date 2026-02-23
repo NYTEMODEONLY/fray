@@ -1,7 +1,7 @@
 /* App shell and base surfaces. */
 html,
 body {
-    background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.14), transparent 55%), var(--fray-bg-0) !important;
+    background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.08), transparent 55%), var(--fray-bg-0) !important;
     color: var(--fray-text-strong) !important;
 }
 

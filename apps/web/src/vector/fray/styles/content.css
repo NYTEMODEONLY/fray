@@ -4,8 +4,8 @@
 .mx_RoomPill,
 a[data-mention-type] {
     color: #f3ebff !important;
-    background: rgba(145, 70, 255, 0.24) !important;
-    border: 1px solid rgba(145, 70, 255, 0.42) !important;
+    background: rgba(145, 70, 255, 0.18) !important;
+    border: 1px solid rgba(145, 70, 255, 0.3) !important;
 }
 
 .mx_EventTile a,

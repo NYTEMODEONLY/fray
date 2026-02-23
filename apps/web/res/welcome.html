@@ -1,16 +1,16 @@
 <style type="text/css">
     /* we deliberately inline style here to avoid flash-of-CSS problems, and to avoid
  * voodoo where we have to set display: none by default
+ * Aligned with fray.chat landing-site design language (Feb 2026)
  */
     .mx_Parent {
         --fray-accent: #9146ff;
         --fray-accent-hover: #7c3aed;
-        --fray-accent-soft: rgba(145, 70, 255, 0.25);
-        --fray-surface: #131316;
-        --fray-surface-strong: #1a1a1f;
-        --fray-border: rgba(255, 255, 255, 0.14);
-        --fray-text-primary: #efedf7;
-        --fray-text-secondary: #c2bed1;
+        --fray-bg-base: #0a0a0a;
+        --fray-bg-card: #111111;
+        --fray-border: #1e1e1e;
+        --fray-text-primary: #ebebeb;
+        --fray-text-secondary: #999999;
 
         position: relative;
         isolation: isolate;
@@ -21,117 +21,95 @@
         text-align: center;
         margin: 8px 0 0;
         padding: 36px 34px 32px;
-        border-radius: 26px;
+        border-radius: 16px;
         border: 1px solid var(--fray-border);
         background:
-            radial-gradient(130% 120% at 14% 0%, rgba(145, 70, 255, 0.36), transparent 56%),
-            linear-gradient(170deg, #111116 0%, #15151a 52%, #101013 100%);
-        box-shadow:
-            0 32px 78px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.07);
+            radial-gradient(ellipse 80% 60% at 50% 0%, rgba(145, 70, 255, 0.10), transparent 60%),
+            linear-gradient(180deg, var(--fray-bg-base) 0%, var(--fray-bg-card) 100%);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
         overflow: hidden;
     }
 
-    .mx_Parent::before {
-        content: "";
-        position: absolute;
-        inset: -36% auto auto -30%;
-        width: 320px;
-        height: 320px;
-        border-radius: 999px;
-        z-index: -2;
-        opacity: 0.6;
-        background: radial-gradient(circle, rgba(145, 70, 255, 0.5), rgba(145, 70, 255, 0));
-    }
-
-    .mx_Parent::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: -1;
-        opacity: 0.12;
-        background-image:
-            linear-gradient(to right, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
-        background-size: 34px 34px;
-        mask-image: linear-gradient(to bottom, black 45%, transparent 100%);
-    }
+    /* No glow blob — removed ::before */
+    /* No grid overlay — removed ::after */
 
     .mx_BrandPill {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 56px;
-        min-height: 56px;
+        min-width: 52px;
+        min-height: 52px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.22);
+        border: 1px solid rgba(145, 70, 255, 0.3);
         color: #ffffff;
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: 24px;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 22px;
         font-weight: 800;
-        letter-spacing: 0.08em;
-        background: linear-gradient(145deg, var(--fray-accent), #5f34c4);
-        box-shadow:
-            0 14px 34px rgba(145, 70, 255, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.3);
-        animation: mx_welcomeFloat 7s ease-in-out infinite;
+        letter-spacing: 0.06em;
+        background: linear-gradient(145deg, var(--fray-accent), #6b2fd6);
+        box-shadow: 0 8px 20px rgba(145, 70, 255, 0.2);
     }
 
     .mx_Kicker {
-        margin: 12px 0 0;
-        color: #bda7ff;
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
+        display: inline-block;
+        margin: 14px 0 0;
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid #222222;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--fray-text-secondary);
+        font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
     }
 
     .mx_Header_title {
-        margin: 14px 0 0;
+        margin: 16px 0 0;
         color: var(--fray-text-primary);
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: clamp(32px, 4vw, 44px);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: clamp(30px, 4vw, 42px);
         line-height: 1.1;
-        font-weight: 760;
-        letter-spacing: -0.02em;
+        font-weight: 800;
+        letter-spacing: -0.03em;
     }
 
     .mx_Header_subtitle {
-        margin: 14px auto 0;
-        max-width: 560px;
+        margin: 12px auto 0;
+        max-width: 520px;
         color: var(--fray-text-secondary);
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         font-size: 15px;
-        line-height: 1.55;
-        font-weight: 420;
+        line-height: 1.6;
+        font-weight: 400;
     }
 
     .mx_FeatureStrip {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 10px;
-        margin: 22px 0 0;
+        gap: 8px;
+        margin: 20px 0 0;
     }
 
     .mx_FeatureStrip span {
         display: inline-flex;
         align-items: center;
-        min-height: 30px;
-        padding: 0 12px;
+        min-height: 28px;
+        padding: 0 10px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        background: rgba(255, 255, 255, 0.06);
-        color: #ddd8eb;
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: 12px;
-        font-weight: 560;
+        border: 1px solid #222222;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--fray-text-secondary);
+        font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
         letter-spacing: 0.02em;
     }
 
     .mx_ButtonGroup {
-        margin-top: 22px;
+        margin-top: 24px;
         width: 100%;
         max-width: 580px;
     }
@@ -149,18 +127,16 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 52px;
+        min-height: 48px;
         width: 100%;
-        padding: 12px 16px 12px 42px;
-        border-radius: 14px;
+        padding: 12px 16px;
+        border-radius: 10px;
         border: 1px solid transparent;
-        background-repeat: no-repeat;
-        background-position: 14px center;
         text-decoration: none;
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: 15px;
-        font-weight: 650;
-        letter-spacing: 0.01em;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0;
         transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
     }
 
@@ -174,59 +150,48 @@
     }
 
     .mx_ButtonLabel {
-        margin-left: 2px;
+        margin-left: 0;
     }
 
     .mx_ButtonSignIn {
         color: #ffffff !important;
-        background-image:
-            linear-gradient(130deg, var(--fray-accent), var(--fray-accent-hover)),
-            url("welcome/images/icon-sign-in.svg");
-        background-repeat: no-repeat, no-repeat;
-        background-size: auto, 18px;
-        background-position: center center, 14px center;
-        box-shadow: 0 12px 24px rgba(145, 70, 255, 0.28);
+        background: var(--fray-accent);
+        box-shadow: 0 4px 12px rgba(145, 70, 255, 0.2);
     }
 
     .mx_ButtonSignIn:hover {
-        box-shadow: 0 16px 28px rgba(145, 70, 255, 0.34);
+        background: var(--fray-accent-hover);
+        box-shadow: 0 6px 16px rgba(145, 70, 255, 0.28);
     }
 
     .mx_ButtonCreateAccount {
-        color: #e8e2fa !important;
-        border-color: rgba(145, 70, 255, 0.5);
-        background-image:
-            linear-gradient(140deg, rgba(145, 70, 255, 0.35), rgba(82, 49, 170, 0.22)),
-            url("welcome/images/icon-create-account.svg");
-        background-repeat: no-repeat, no-repeat;
-        background-size: auto, 18px;
-        background-position: center center, 14px center;
+        color: var(--fray-text-primary) !important;
+        border-color: #2a2a2a;
+        background: transparent;
     }
 
     .mx_ButtonCreateAccount:hover {
-        background: linear-gradient(140deg, rgba(145, 70, 255, 0.48), rgba(82, 49, 170, 0.3));
+        border-color: #333333;
+        background: rgba(255, 255, 255, 0.04);
     }
 
     .mx_SecondaryButton {
-        color: #e4dff2 !important;
-        border-color: rgba(255, 255, 255, 0.2);
-        background-image: url("welcome/images/icon-room-directory.svg");
-        background-repeat: no-repeat;
-        background-size: 18px;
-        background-position: 14px center;
-        background-color: var(--fray-surface-strong);
+        color: var(--fray-text-secondary) !important;
+        border-color: #222222;
+        background: transparent;
     }
 
     .mx_SecondaryButton:hover {
-        background-color: #24242b;
+        border-color: #2a2a2a;
+        background: rgba(255, 255, 255, 0.03);
     }
 
     .mx_MatrixHint {
-        margin: 18px 0 0;
-        color: #9f9bb3;
-        font-family: "Sora", "Avenir Next", "Trebuchet MS", sans-serif;
-        font-size: 12px;
-        font-weight: 450;
+        margin: 20px 0 0;
+        color: #555555;
+        font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
         letter-spacing: 0.02em;
     }
 
@@ -243,18 +208,6 @@ we don't have an account and should hide them. No account == no guest account ei
         width: 100%;
     }
 
-    @keyframes mx_welcomeFloat {
-        0% {
-            transform: translateY(0);
-        }
-        50% {
-            transform: translateY(-3px);
-        }
-        100% {
-            transform: translateY(0);
-        }
-    }
-
     @media only screen and (max-width: 900px) {
         .mx_Parent {
             width: min(680px, calc(100vw - 28px));
@@ -263,7 +216,7 @@ we don't have an account and should hide them. No account == no guest account ei
 
     @media only screen and (max-width: 640px) {
         .mx_Parent {
-            border-radius: 20px;
+            border-radius: 12px;
             padding: 26px 18px 24px;
         }
 
@@ -273,7 +226,7 @@ we don't have an account and should hide them. No account == no guest account ei
         }
 
         .mx_ButtonParent {
-            min-height: 50px;
+            min-height: 46px;
         }
     }
 </style>
