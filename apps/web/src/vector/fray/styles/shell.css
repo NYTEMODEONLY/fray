@@ -1,8 +1,61 @@
 /* App shell and base surfaces. */
+
+/* Override Compound's default font family with Fray body font */
+:root,
+[class*="cpd-theme-"] {
+    --cpd-font-family-sans: var(--fray-font-body) !important;
+}
+
 html,
 body {
     background: radial-gradient(1200px circle at 15% -10%, rgba(145, 70, 255, 0.08), transparent 55%), var(--fray-bg-0) !important;
     color: var(--fray-text-strong) !important;
+    font-family: var(--fray-font-body) !important;
+}
+
+/* Display font for headings, dialog titles, room header names */
+h1, h2, h3, h4, h5, h6,
+.mx_RoomHeader_nametext,
+.mx_RoomPreviewBar_title,
+.mx_RoomView_header_name,
+.mx_BaseDialog_title,
+.mx_Dialog_title,
+[class*="_dialogTitle"],
+.mx_SpaceRoomView_landing_name,
+.mx_SpaceRoomView_landing h1 {
+    font-family: var(--fray-font-display) !important;
+    letter-spacing: -0.02em;
+}
+
+/* Monospace for code blocks */
+pre, code, kbd, samp,
+.mx_EventTile_code,
+.mx_Markdown_HTMLE code {
+    font-family: var(--fray-font-mono) !important;
+}
+
+/* Custom scrollbars — thin, purple-tinted */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fray-scrollbar-thumb) var(--fray-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--fray-scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--fray-scrollbar-thumb);
+    border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--fray-scrollbar-thumb-hover);
 }
 
 #matrixchat,

@@ -17,6 +17,24 @@
     box-shadow: 0 -1px 0 0 rgba(145, 70, 255, 0.06) inset, 0 1px 0 0 rgba(145, 70, 255, 0.06);
 }
 
+/* Display font on auth headings */
+.mx_AuthPage h1,
+.mx_AuthPage h2,
+.mx_AuthPage h3,
+.mx_AuthBody_loginRegister h2,
+.mx_Welcome h2,
+.mx_AuthPage_modal h2 {
+    font-family: var(--fray-font-display) !important;
+    letter-spacing: -0.02em;
+}
+
+/* Monospace on server name display */
+.mx_ServerPicker_server,
+.mx_AuthBody .mx_ServerPicker .mx_ServerPicker_server {
+    font-family: var(--fray-font-mono) !important;
+    font-size: 0.9em;
+}
+
 .mx_AuthBody {
     background-color: var(--fray-bg-1) !important;
     color: var(--fray-text-primary) !important;
@@ -28,4 +46,36 @@
     background-color: var(--fray-bg-2) !important;
     border-color: var(--fray-border-strong) !important;
     color: var(--fray-text-strong) !important;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Focus rings on auth inputs */
+.mx_AuthBody .mx_Field input:focus,
+.mx_AuthBody .mx_Field select:focus {
+    border-color: var(--fray-accent-border) !important;
+    box-shadow: var(--fray-focus-ring) !important;
+    outline: none !important;
+}
+
+/* Gradient + glow submit button (matches send button style) */
+.mx_AuthBody .mx_Login_submit,
+.mx_AuthBody .mx_AccessibleButton_kind_primary {
+    background: linear-gradient(135deg, var(--fray-accent), var(--fray-accent-hover)) !important;
+    box-shadow: 0 10px 20px rgba(145, 70, 255, 0.25) !important;
+    border: none !important;
+    color: #f8f7ff !important;
+    font-weight: 600 !important;
+    transition: all 0.15s !important;
+}
+
+.mx_AuthBody .mx_Login_submit:hover,
+.mx_AuthBody .mx_AccessibleButton_kind_primary:hover {
+    background: linear-gradient(135deg, var(--fray-accent-hover), var(--fray-accent-pressed)) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px rgba(145, 70, 255, 0.3) !important;
+}
+
+.mx_AuthBody .mx_Login_submit:active,
+.mx_AuthBody .mx_AccessibleButton_kind_primary:active {
+    transform: scale(0.98);
 }

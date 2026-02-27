@@ -2,6 +2,8 @@
 # Keep this list intentionally small. Add entries only when a scoped override cannot be isolated under src/vector/fray/.
 
 package.json
+pnpm-lock.yaml
+README.md
 res/css/views/auth/_Welcome.pcss
 res/manifest.json
 res/welcome.html

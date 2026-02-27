@@ -27,9 +27,40 @@
     --fray-border: #222222;
     --fray-border-strong: #2a2a2a;
 
-    --fray-mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+    --fray-font-display: "Geist Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --fray-font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --fray-font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+    --fray-mono: var(--fray-font-mono);
+
+    --fray-scrollbar-thumb: rgba(145, 70, 255, 0.25);
+    --fray-scrollbar-thumb-hover: rgba(145, 70, 255, 0.4);
+    --fray-scrollbar-track: transparent;
+
+    --fray-elevation-dialog: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px #222222;
+    --fray-elevation-popover: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px #222222;
 
     --fray-focus-ring: 0 0 0 2px rgba(145, 70, 255, 0.3);
+
+    --cpd-font-family-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────── */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(145, 70, 255, 0.25) transparent;
+}
+
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(145, 70, 255, 0.25); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(145, 70, 255, 0.4); }
+
+/* ── Dialog surfaces ──────────────────────────────────────────── */
+.mx_Dialog,
+.mx_BaseDialog {
+    background-color: #111111 !important;
+    border: 1px solid #222222 !important;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px #222222 !important;
 }
 
 /* ── Shell: subtler radial glow ─────────────────────────────── */

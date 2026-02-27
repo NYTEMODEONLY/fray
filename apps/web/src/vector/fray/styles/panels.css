@@ -1,0 +1,218 @@
+/* Settings, modals, emoji picker, context menus, and overlay surfaces. */
+
+/* ── Dialog / modal base surface ──────────────────────────────── */
+.mx_Dialog,
+.mx_BaseDialog,
+[class*="_dialog_"][role="dialog"],
+.mx_Dialog_wrapper .mx_Dialog {
+    background-color: var(--fray-bg-1) !important;
+    border: 1px solid var(--fray-border) !important;
+    border-radius: 16px !important;
+    box-shadow: var(--fray-elevation-dialog) !important;
+    color: var(--fray-text-primary) !important;
+}
+
+/* Dialog header */
+.mx_Dialog_header,
+.mx_BaseDialog_header {
+    border-bottom: 1px solid var(--fray-border) !important;
+}
+
+/* Dialog close button */
+.mx_Dialog_cancelButton,
+.mx_AccessibleButton.mx_Dialog_cancelButton {
+    color: var(--fray-text-secondary) !important;
+}
+
+.mx_Dialog_cancelButton:hover {
+    color: var(--fray-text-strong) !important;
+}
+
+/* Dialog backdrop — deeper overlay */
+.mx_Dialog_background,
+.mx_Dialog_wrapper::before {
+    background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* ── Settings dialog ──────────────────────────────────────────── */
+.mx_UserSettingsDialog .mx_TabbedView,
+.mx_TabbedView {
+    background-color: var(--fray-bg-1) !important;
+}
+
+/* Settings tab list sidebar */
+.mx_TabbedView_tabLabels,
+.mx_UserSettingsDialog .mx_TabbedView_tabLabels {
+    background-color: var(--fray-bg-0) !important;
+    border-right: 1px solid var(--fray-border) !important;
+}
+
+/* Individual settings tab */
+.mx_TabbedView_tabLabel {
+    color: var(--fray-text-secondary) !important;
+    border-radius: 8px;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.mx_TabbedView_tabLabel:hover {
+    background-color: var(--fray-bg-2) !important;
+    color: var(--fray-text-strong) !important;
+}
+
+/* Active settings tab — accent colored */
+.mx_TabbedView_tabLabel_active,
+.mx_TabbedView_tabLabel[aria-selected="true"] {
+    background-color: var(--fray-accent-soft) !important;
+    color: var(--fray-accent) !important;
+    border-color: transparent !important;
+}
+
+/* Settings tab content area */
+.mx_TabbedView_tabPanel,
+.mx_SettingsTab {
+    background-color: var(--fray-bg-1) !important;
+    color: var(--fray-text-primary) !important;
+}
+
+/* Settings section headers */
+.mx_SettingsTab_heading,
+.mx_SettingsTab h2,
+.mx_SettingsTab h3 {
+    color: var(--fray-text-strong) !important;
+    font-family: var(--fray-font-display) !important;
+}
+
+/* Settings subsection borders */
+.mx_SettingsSection,
+.mx_SettingsTab_section {
+    border-bottom-color: var(--fray-border) !important;
+}
+
+/* Settings inputs */
+.mx_SettingsTab input[type="text"],
+.mx_SettingsTab input[type="password"],
+.mx_SettingsTab select,
+.mx_SettingsTab textarea {
+    background-color: var(--fray-bg-2) !important;
+    border-color: var(--fray-border-strong) !important;
+    color: var(--fray-text-strong) !important;
+}
+
+/* ── Toggle switches ──────────────────────────────────────────── */
+.mx_ToggleSwitch_on,
+.mx_ToggleSwitch[aria-checked="true"],
+[class*="_toggleSwitch_"][class*="_on_"] {
+    background-color: var(--fray-accent) !important;
+}
+
+.mx_ToggleSwitch,
+[class*="_toggleSwitch_"] {
+    background-color: var(--fray-bg-4) !important;
+    border-color: var(--fray-border-strong) !important;
+}
+
+/* ── Emoji picker ─────────────────────────────────────────────── */
+.mx_EmojiPicker,
+.mx_EmojiPicker_body {
+    background-color: var(--fray-bg-1) !important;
+    border: 1px solid var(--fray-border) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--fray-elevation-popover) !important;
+}
+
+.mx_EmojiPicker_header {
+    background-color: var(--fray-bg-1) !important;
+    border-bottom: 1px solid var(--fray-border) !important;
+}
+
+/* Emoji picker category nav */
+.mx_EmojiPicker_header li.mx_EmojiPicker_tab {
+    color: var(--fray-text-secondary) !important;
+}
+
+.mx_EmojiPicker_header li.mx_EmojiPicker_tab_active {
+    color: var(--fray-accent) !important;
+    border-bottom-color: var(--fray-accent) !important;
+}
+
+/* Emoji picker search */
+.mx_EmojiPicker_search input {
+    background-color: var(--fray-bg-2) !important;
+    border-color: var(--fray-border-strong) !important;
+    color: var(--fray-text-strong) !important;
+}
+
+.mx_EmojiPicker_search input:focus {
+    border-color: var(--fray-accent-border) !important;
+    box-shadow: var(--fray-focus-ring);
+}
+
+/* Emoji hover */
+.mx_EmojiPicker_item:hover {
+    background-color: var(--fray-accent-soft) !important;
+    border-radius: 6px;
+}
+
+/* Emoji picker category labels */
+.mx_EmojiPicker_category_label {
+    color: var(--fray-text-tertiary) !important;
+    font-family: var(--fray-font-display) !important;
+    font-weight: 600;
+}
+
+/* ── Context menus ────────────────────────────────────────────── */
+.mx_ContextualMenu,
+.mx_ContextualMenu_wrapper .mx_ContextualMenu {
+    background-color: var(--fray-bg-2) !important;
+    border: 1px solid var(--fray-border) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--fray-elevation-popover) !important;
+    color: var(--fray-text-primary) !important;
+}
+
+.mx_ContextualMenu .mx_AccessibleButton,
+.mx_ContextualMenu_item {
+    color: var(--fray-text-primary) !important;
+    border-radius: 6px;
+}
+
+.mx_ContextualMenu .mx_AccessibleButton:hover,
+.mx_ContextualMenu_item:hover {
+    background-color: var(--fray-accent-soft) !important;
+    color: var(--fray-text-strong) !important;
+}
+
+/* Context menu separator */
+.mx_ContextualMenu hr,
+.mx_ContextualMenu_separator {
+    border-color: var(--fray-border) !important;
+}
+
+/* ── Power level / role badges in member list ─────────────────── */
+.mx_EntityTile_power {
+    color: var(--fray-accent) !important;
+}
+
+/* ── Generic dropdown / popover surfaces ──────────────────────── */
+.mx_Dropdown_menu,
+.mx_Autocomplete_Completion_container,
+[class*="_menu_"][role="menu"],
+[class*="_dropdown_"] {
+    background-color: var(--fray-bg-2) !important;
+    border: 1px solid var(--fray-border) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--fray-elevation-popover) !important;
+}
+
+/* ── User info / member detail panel ──────────────────────────── */
+.mx_UserInfo,
+.mx_MemberInfo {
+    background-color: var(--fray-bg-1) !important;
+    border-left: 1px solid var(--fray-border) !important;
+}
+
+/* ── Room directory dialog ────────────────────────────────────── */
+.mx_RoomDirectory,
+.mx_AddExistingToSpaceDialog {
+    background-color: var(--fray-bg-1) !important;
+}

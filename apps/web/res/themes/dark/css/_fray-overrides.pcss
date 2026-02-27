@@ -1,5 +1,5 @@
 /* Fray dark theme overrides - loaded AFTER Compound CSS */
-/* per design_philo.md: deep purple-black bg, white text */
+/* Tooltip surfaces match --fray-bg-3 (#1e1e1e) with subtle border */
 /* ******************** */
 
 /* Compound Tooltip: uses hashed CSS module class ._tooltip_1nqnq_8 */
@@ -7,33 +7,36 @@
 /* these at document root inside .cpd-theme-dark scope, so we need */
 /* !important to beat the Compound token resolution. */
 ._tooltip_1nqnq_8 {
-    background: #1a0b2e !important;
-    color: hsl(0, 0%, 98%) !important;
+    background: #1e1e1e !important;
+    color: #ebebeb !important;
+    border: 1px solid #222222 !important;
 }
 
 ._arrow_1nqnq_33 {
-    fill: #1a0b2e !important;
+    fill: #1e1e1e !important;
 }
 
 /* Also catch via role attr for description tooltips */
 [role="tooltip"] {
-    background: #1a0b2e !important;
-    color: hsl(0, 0%, 98%) !important;
+    background: #1e1e1e !important;
+    color: #ebebeb !important;
+    border: 1px solid #222222 !important;
 }
 
 /* InteractiveTooltip uses $background variable, not Compound tokens */
 .mx_InteractiveTooltip {
-    background-color: #1a0b2e !important;
-    color: hsl(0, 0%, 98%) !important;
+    background-color: #1e1e1e !important;
+    color: #ebebeb !important;
+    border: 1px solid #222222 !important;
 }
 
 .mx_InteractiveTooltip_chevron_top {
-    border-bottom-color: #1a0b2e !important;
-    background-color: #1a0b2e !important;
+    border-bottom-color: #1e1e1e !important;
+    background-color: #1e1e1e !important;
 }
 
 .mx_InteractiveTooltip_chevron_bottom {
-    border-top-color: #1a0b2e !important;
-    background-color: #1a0b2e !important;
+    border-top-color: #1e1e1e !important;
+    background-color: #1e1e1e !important;
 }
 /* ******************** */

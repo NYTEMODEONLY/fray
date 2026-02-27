@@ -20,7 +20,17 @@
     --fray-border: #222222;
     --fray-border-strong: #2a2a2a;
 
-    --fray-mono: "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+    --fray-font-display: "Geist Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --fray-font-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --fray-font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+    --fray-mono: var(--fray-font-mono);
+
+    --fray-scrollbar-thumb: rgba(145, 70, 255, 0.25);
+    --fray-scrollbar-thumb-hover: rgba(145, 70, 255, 0.4);
+    --fray-scrollbar-track: transparent;
+
+    --fray-elevation-dialog: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--fray-border);
+    --fray-elevation-popover: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--fray-border);
 
     --fray-bubble-other: #171717;
     --fray-bubble-self: #2a1b46;

@@ -33,11 +33,21 @@
 
 .mx_MessageComposer_button {
     background-color: var(--fray-bg-3) !important;
+    border: 1px solid var(--fray-border) !important;
     border-radius: 8px;
+    transition: all 0.15s !important;
 }
 
 .mx_MessageComposer_button:hover {
     background-color: var(--fray-bg-4) !important;
+    border-color: var(--fray-border-strong) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.mx_MessageComposer_button:active {
+    transform: scale(0.95);
+    box-shadow: none;
 }
 
 .mx_MessageComposer_sendMessage {
