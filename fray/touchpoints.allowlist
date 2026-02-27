@@ -1,25 +1,26 @@
 # Fray direct touchpoints in upstream files.
-# Keep this list intentionally small. Add entries only when a scoped override cannot be isolated under src/vector/fray/.
+# Keep this list intentionally small. Add entries only when a scoped override cannot be isolated under apps/web/src/vector/fray/.
 
 package.json
 pnpm-lock.yaml
 README.md
-res/css/views/auth/_Welcome.pcss
-res/manifest.json
-res/welcome.html
-src/SdkConfig.ts
-src/async-components/structures/ErrorView.tsx
-src/components/structures/HomePage.tsx
-src/components/views/auth/AuthHeaderLogo.tsx
-src/components/views/auth/AuthPage.tsx
-src/components/views/auth/Welcome.tsx
-src/i18n/strings/en_EN.json
-src/vector/index.html
-src/vector/index.ts
-src/vector/mobile_guide/index.html
-src/vector/mobile_guide/index.ts
-src/vector/mobile_guide/mobile-apps.ts
-webpack.config.ts
-res/themes/dark/css/_dark.pcss
-res/themes/dark/css/dark.pcss
-res/themes/dark-custom/css/dark-custom.pcss
+apps/web/package.json
+apps/web/res/css/views/auth/_Welcome.pcss
+apps/web/res/manifest.json
+apps/web/res/welcome.html
+apps/web/src/SdkConfig.ts
+apps/web/src/async-components/structures/ErrorView.tsx
+apps/web/src/components/structures/HomePage.tsx
+apps/web/src/components/views/auth/AuthHeaderLogo.tsx
+apps/web/src/components/views/auth/AuthPage.tsx
+apps/web/src/components/views/auth/Welcome.tsx
+apps/web/src/i18n/strings/en_EN.json
+apps/web/src/vector/index.html
+apps/web/src/vector/index.ts
+apps/web/src/vector/mobile_guide/index.html
+apps/web/src/vector/mobile_guide/index.ts
+apps/web/src/vector/mobile_guide/mobile-apps.ts
+apps/web/webpack.config.ts
+apps/web/res/themes/dark/css/_dark.pcss
+apps/web/res/themes/dark/css/dark.pcss
+apps/web/res/themes/dark-custom/css/dark-custom.pcss

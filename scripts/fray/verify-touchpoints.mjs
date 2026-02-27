@@ -79,20 +79,37 @@ const allowlist = loadAllowlist(allowlistPath);
 const allowedPrefixes = [
     "fray/",
     "scripts/fray/",
-    "src/vector/fray/",
-    "src/vector/fray-overrides.css",
+    "apps/web/src/vector/fray/",
+    "apps/web/src/vector/fray-overrides.css",
+    "apps/web/config.json",
     "config.json",
-    "res/themes/element/img/logos/fray-logo.svg",
-    "res/themes/dark/css/_fray-overrides.pcss",
-    "res/themes/dark-custom/css/_fray-overrides.pcss",
+    "apps/web/res/themes/element/img/logos/fray-logo.svg",
+    "apps/web/res/themes/dark/css/_fray-overrides.pcss",
+    "apps/web/res/themes/dark-custom/css/_fray-overrides.pcss",
     "docs/hacks.md",
 ];
 
-function isAllowed(filePath) {
-    if (allowlist.has(filePath)) {
-        return true;
-    }
+// Patterns to ignore (build artifacts, generated files)
+const ignoredPrefixes = [
+    "webapp/",
+    "node_modules/",
+    ".cache/",
+    "apps/web/webapp/",
+];
 
+const ignoredFiles = new Set([
+    "src/modules.js",
+    "apps/web/src/modules.js",
+]);
+
+function isIgnored(filePath) {
+    if (ignoredFiles.has(filePath)) return true;
+    return ignoredPrefixes.some((prefix) => filePath.startsWith(prefix));
+}
+
+function isAllowed(filePath) {
+    if (isIgnored(filePath)) return true;
+    if (allowlist.has(filePath)) return true;
     return allowedPrefixes.some((prefix) => filePath === prefix || filePath.startsWith(prefix));
 }
 
@@ -103,7 +120,7 @@ if (disallowed.length) {
     for (const filePath of disallowed) {
         console.error(`  - ${filePath}`);
     }
-    console.error("\n[fray] Move new customizations under src/vector/fray/ when possible,");
+    console.error("\n[fray] Move new customizations under apps/web/src/vector/fray/ when possible,");
     console.error("[fray] or explicitly document and allowlist an unavoidable direct touchpoint.");
     process.exit(1);
 }

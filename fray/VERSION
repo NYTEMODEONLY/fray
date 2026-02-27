@@ -1,4 +1,4 @@
 upstream: element-hq/element-web
-base_ref: 352feb2
+base_ref: 3fb99fe
 base_version: 1.12.11-rc.0
-last_sync: 2026-02-22
+last_sync: 2026-02-26
