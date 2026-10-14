@@ -79,7 +79,7 @@
         "js-xxhash": "^5.0.0",
         "jsrsasign": "^11.0.0",
         "jszip": "^3.7.0",
-        "katex": "^0.16.0",
+        "katex": "^0.18.2",
         "linkify-html": "4.3.2",
         "linkify-react": "4.3.2",
         "linkify-string": "4.3.2",
